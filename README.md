@@ -131,4 +131,4 @@ This project is open source and available under the MIT License.
 
 ## Author
 
-**Vedant Bisht** - [GitHub](https://github.com/VedantBist)
+**Vedant Bist** - [GitHub](https://github.com/VedantBist)
