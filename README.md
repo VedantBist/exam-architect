@@ -1,73 +1,134 @@
-# Welcome to your Lovable project
+# Exam Architect
 
-## Project info
+A comprehensive exam management and testing platform built with modern web technologies. Exam Architect provides a complete solution for creating exams, managing students, and tracking results with a secure authentication system.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- **User Authentication**: Secure login system powered by Supabase with role-based access control
+- **Admin Dashboard**: Create, manage, and monitor exams with comprehensive analytics
+- **Student Dashboard**: View available exams, take exams, and track results
+- **Exam Creation**: Intuitive interface for creating exams with multiple question types
+- **Real-time Results**: Instant feedback and detailed result tracking
+- **Responsive Design**: Fully responsive UI that works on desktop and mobile devices
+- **TypeScript Support**: Full type safety across the application
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **Frontend**: React 18+ with TypeScript
+- **Build Tool**: Vite
+- **UI Framework**: shadcn-ui + Radix UI
+- **Styling**: Tailwind CSS
+- **Backend**: Supabase (PostgreSQL + Auth)
+- **Testing**: Vitest
+- **Code Quality**: ESLint
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js (v16 or higher)
+- npm or Bun package manager
+- Supabase account (for database and auth)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Installation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+```bash
+# Clone the repository
+git clone https://github.com/VedantBist/exam-architect.git
 
-Follow these steps:
+# Navigate to the project directory
+cd exam-architect
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# Install dependencies
+npm install
+# or
+bun install
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# Configure environment variables
+cp .env.example .env.local
+# Add your Supabase credentials to .env.local
 ```
 
-**Edit a file directly in GitHub**
+### Development
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```bash
+# Start the development server
+npm run dev
+# or
+bun run dev
+```
 
-**Use GitHub Codespaces**
+The application will be available at `http://localhost:5173`
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Build
 
-## What technologies are used for this project?
+```bash
+# Build for production
+npm run build
+# or
+bun run build
 
-This project is built with:
+# Preview production build
+npm run preview
+# or
+bun run preview
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Testing
 
-## How can I deploy this project?
+```bash
+# Run tests
+npm run test
+# or
+bun run test
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+## Project Structure
 
-## Can I connect a custom domain to my Lovable project?
+```
+src/
+├── pages/              # Page components (Auth, Dashboard, etc.)
+├── components/         # Reusable UI components
+│   ├── ui/            # shadcn-ui components
+│   ├── auth/          # Authentication components
+│   └── layout/        # Layout components
+├── lib/               # Utility functions and helpers
+├── hooks/             # Custom React hooks
+├── data/              # Static data and seeds
+└── integrations/      # External service integrations (Supabase)
+```
 
-Yes, you can!
+## Configuration
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### Environment Variables
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Create a `.env.local` file in the root directory:
+
+```
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+### Supabase Setup
+
+1. Create a Supabase project at https://supabase.com
+2. Run migrations from `supabase/migrations/`
+3. Configure auth policies for students and admins
+
+## Documentation
+
+- [Authentication System](./AUTH_SYSTEM.md) - Detailed auth architecture
+- [Project Report](./PROJECT_REPORT.md) - Comprehensive project overview
+- [Quick Reference](./QUICK_REF.md) - Quick commands and tips
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is open source and available under the MIT License.
+
+## Author
+
+**Vedant Bisht** - [GitHub](https://github.com/VedantBist)
