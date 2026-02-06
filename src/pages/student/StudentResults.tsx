@@ -1,39 +1,26 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { Trophy, TrendingUp, TrendingDown, FileText, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
-import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { getAttemptsByStudent, getExamById } from '@/lib/examStorage';
 
-interface Result {
+interface DisplayResult {
   id: string;
-  attempt_id: string;
-  total_marks: number;
-  obtained_marks: number;
+  examId: string;
+  examTitle: string;
+  score: number;
+  totalMarks: number;
   percentage: number;
   passed: boolean;
-  evaluated_at: string;
-  exam_attempts: {
-    id: string;
-    exam_id: string;
-    status: string;
-    start_time: string;
-    end_time: string | null;
-    exams: {
-      id: string;
-      title: string;
-      passing_percentage: number;
-    };
-  };
+  submittedAt: string;
 }
 
 export default function StudentResults() {
-  const [results, setResults] = useState<Result[]>([]);
+  const [results, setResults] = useState<DisplayResult[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
@@ -43,38 +30,30 @@ export default function StudentResults() {
     }
   }, [user]);
 
-  async function fetchResults() {
+  function fetchResults() {
     try {
-      const { data, error } = await supabase
-        .from('results')
-        .select(`
-          id,
-          attempt_id,
-          total_marks,
-          obtained_marks,
-          percentage,
-          passed,
-          evaluated_at,
-          exam_attempts!inner (
-            id,
-            exam_id,
-            status,
-            start_time,
-            end_time,
-            exams!inner (
-              id,
-              title,
-              passing_percentage
-            )
-          )
-        `)
-        .order('evaluated_at', { ascending: false });
-
-      if (error) throw error;
-      setResults((data as unknown as Result[]) || []);
+      if (!user) return;
+      
+      const attempts = getAttemptsByStudent(user.id);
+      const displayResults = attempts
+        .filter(a => a.status === 'submitted' && a.submittedAt)
+        .map(a => {
+          const exam = getExamById(a.examId);
+          return {
+            id: a.id,
+            examId: a.examId,
+            examTitle: exam?.title || 'Unknown Exam',
+            score: a.score,
+            totalMarks: a.totalMarks,
+            percentage: a.percentage,
+            passed: a.percentage >= (exam?.passingPercentage || 40),
+            submittedAt: a.submittedAt!,
+          };
+        });
+      
+      setResults(displayResults);
     } catch (error) {
       console.error('Error fetching results:', error);
-      toast.error('Failed to load results');
     } finally {
       setLoading(false);
     }
@@ -164,18 +143,10 @@ export default function StudentResults() {
                   <CardContent className="p-6">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="space-y-1">
-                        <h3 className="font-semibold text-lg">{exam.title}</h3>
+                        <h3 className="font-semibold text-lg">{result.examTitle}</h3>
                         <p className="text-sm text-muted-foreground">
-                          Completed {format(new Date(result.evaluated_at), 'MMM d, yyyy \'at\' h:mm a')}
+                          Completed {format(new Date(result.submittedAt), 'MMM d, yyyy \'at\' h:mm a')}
                         </p>
-                        <div className="flex items-center gap-2 mt-2">
-                          {attempt.status === 'auto_submitted' && (
-                            <Badge variant="outline" className="text-warning border-warning">
-                              <Clock className="mr-1 h-3 w-3" />
-                              Auto-submitted
-                            </Badge>
-                          )}
-                        </div>
                       </div>
 
                       <div className="flex flex-col md:items-end gap-3">
@@ -183,7 +154,7 @@ export default function StudentResults() {
                           <div className="text-right">
                             <p className="text-sm text-muted-foreground">Score</p>
                             <p className="text-2xl font-bold">
-                              {result.obtained_marks}/{result.total_marks}
+                              {result.score}/{result.totalMarks}
                             </p>
                           </div>
                           <div className="text-right">

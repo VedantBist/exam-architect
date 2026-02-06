@@ -31,54 +31,57 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { getExams, deleteExam } from '@/lib/examStorage';
+import { useAuth } from '@/lib/auth';
 
-interface Exam {
+interface DisplayExam {
   id: string;
   title: string;
-  description: string | null;
-  duration_minutes: number;
-  status: 'created' | 'scheduled' | 'active' | 'closed';
-  start_time: string | null;
-  end_time: string | null;
-  passing_percentage: number;
-  created_at: string;
+  description: string;
+  durationMinutes: number;
+  status: 'created' | 'active' | 'archived';
+  passingPercentage: number;
+  createdAt: string;
 }
 
 const statusColors = {
   created: 'bg-muted text-muted-foreground',
-  scheduled: 'bg-warning/10 text-warning',
   active: 'bg-success/10 text-success',
-  closed: 'bg-muted text-muted-foreground',
+  archived: 'bg-muted text-muted-foreground',
 };
 
 const statusIcons = {
   created: Clock,
-  scheduled: Clock,
   active: Play,
-  closed: CheckCircle,
+  archived: CheckCircle,
 };
 
 export default function ManageExams() {
-  const [exams, setExams] = useState<Exam[]>([]);
+  const [exams, setExams] = useState<DisplayExam[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteExamId, setDeleteExamId] = useState<string | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchExams();
   }, []);
 
-  async function fetchExams() {
+  function fetchExams() {
     try {
-      const { data, error } = await supabase
-        .from('exams')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setExams(data || []);
+      const allExams = getExams();
+      // Filter to show only exams created by this user
+      const userExams = allExams.map(exam => ({
+        id: exam.id,
+        title: exam.title,
+        description: exam.description,
+        durationMinutes: exam.durationMinutes,
+        status: exam.status,
+        passingPercentage: exam.passingPercentage,
+        createdAt: exam.createdAt,
+      }));
+      setExams(userExams);
     } catch (error) {
       console.error('Error fetching exams:', error);
       toast.error('Failed to load exams');
@@ -87,42 +90,13 @@ export default function ManageExams() {
     }
   }
 
-  async function updateExamStatus(examId: string, newStatus: Exam['status']) {
+  function handleDeleteExam(examId: string) {
     try {
-      const updateData: { status: 'created' | 'scheduled' | 'active' | 'closed'; start_time?: string; end_time?: string } = { status: newStatus };
-      
-      if (newStatus === 'active') {
-        updateData.start_time = new Date().toISOString();
-      } else if (newStatus === 'closed') {
-        updateData.end_time = new Date().toISOString();
+      const success = deleteExam(examId);
+      if (success) {
+        toast.success('Exam deleted');
+        setExams(exams.filter(e => e.id !== examId));
       }
-
-      const { error } = await supabase
-        .from('exams')
-        .update(updateData)
-        .eq('id', examId);
-
-      if (error) throw error;
-      
-      toast.success(`Exam ${newStatus === 'active' ? 'activated' : newStatus}`);
-      fetchExams();
-    } catch (error) {
-      console.error('Error updating exam:', error);
-      toast.error('Failed to update exam');
-    }
-  }
-
-  async function deleteExam(examId: string) {
-    try {
-      const { error } = await supabase
-        .from('exams')
-        .delete()
-        .eq('id', examId);
-
-      if (error) throw error;
-      
-      toast.success('Exam deleted');
-      setExams(exams.filter(e => e.id !== examId));
     } catch (error) {
       console.error('Error deleting exam:', error);
       toast.error('Failed to delete exam');
@@ -212,18 +186,6 @@ export default function ManageExams() {
                               Edit Exam
                             </Link>
                           </DropdownMenuItem>
-                          {exam.status === 'created' && (
-                            <DropdownMenuItem onClick={() => updateExamStatus(exam.id, 'active')}>
-                              <Play className="mr-2 h-4 w-4" />
-                              Activate
-                            </DropdownMenuItem>
-                          )}
-                          {exam.status === 'active' && (
-                            <DropdownMenuItem onClick={() => updateExamStatus(exam.id, 'closed')}>
-                              <Pause className="mr-2 h-4 w-4" />
-                              Close Exam
-                            </DropdownMenuItem>
-                          )}
                           <DropdownMenuItem 
                             className="text-destructive"
                             onClick={() => setDeleteExamId(exam.id)}
@@ -243,14 +205,14 @@ export default function ManageExams() {
                           {exam.status.charAt(0).toUpperCase() + exam.status.slice(1)}
                         </Badge>
                         <span className="text-sm text-muted-foreground">
-                          {exam.duration_minutes} min
+                          {exam.durationMinutes} min
                         </span>
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Created {format(new Date(exam.created_at), 'MMM d, yyyy')}
+                        Created {format(new Date(exam.createdAt), 'MMM d, yyyy')}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Pass: {exam.passing_percentage}%
+                        Pass: {exam.passingPercentage}%
                       </div>
                     </div>
                   </CardContent>
@@ -266,14 +228,19 @@ export default function ManageExams() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Exam</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this exam? This action cannot be undone and will also delete all questions and attempts.
+              Are you sure you want to delete this exam? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => deleteExamId && deleteExam(deleteExamId)}
+              onClick={() => {
+                if (deleteExamId) {
+                  handleDeleteExam(deleteExamId);
+                  setDeleteExamId(null);
+                }
+              }}
             >
               Delete
             </AlertDialogAction>

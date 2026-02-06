@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Plus, Trash2, Loader2, GripVertical } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Loader2, GripVertical, Zap } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,9 +13,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
+import { examTemplates } from '@/data/jeeTestData';
+import { createExam } from '@/lib/examStorage';
 
 const optionSchema = z.object({
   text: z.string().min(1, 'Option text is required'),
@@ -55,6 +56,7 @@ const defaultQuestion = {
 
 export default function CreateExam() {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -74,66 +76,78 @@ export default function CreateExam() {
     name: 'questions',
   });
 
+  const loadTemplate = (templateKey: string) => {
+    const template = examTemplates[templateKey];
+    if (!template) return;
+
+    setIsLoadingTemplate(true);
+    
+    // Reset form and load template data
+    const formattedQuestions = template.questions.map(q => ({
+      text: q.text,
+      type: q.type,
+      marks: q.marks,
+      correctAnswer: q.type === 'mcq' ? '' : q.correctAnswer,
+      options: q.options ? q.options.map(opt => ({
+        text: opt,
+        isCorrect: q.correctAnswer === `option_${q.options?.indexOf(opt)}`,
+      })) : (q.type === 'true_false' ? [
+        { text: 'True', isCorrect: q.correctAnswer === 'true' },
+        { text: 'False', isCorrect: q.correctAnswer === 'false' },
+      ] : undefined),
+    }));
+
+    form.reset({
+      title: template.title,
+      description: template.description,
+      durationMinutes: template.durationMinutes,
+      passingPercentage: template.passingPercentage,
+      questions: formattedQuestions,
+    });
+
+    toast.success(`Loaded: ${template.title}`);
+    setIsLoadingTemplate(false);
+  };
+
   async function onSubmit(data: ExamFormData) {
     if (!user) return;
     setIsSubmitting(true);
 
     try {
-      // Create exam
-      const { data: exam, error: examError } = await supabase
-        .from('exams')
-        .insert({
-          title: data.title,
-          description: data.description || null,
-          duration_minutes: data.durationMinutes,
-          passing_percentage: data.passingPercentage,
-          created_by: user.id,
-          status: 'created',
-        })
-        .select()
-        .single();
+      // Transform form data to exam storage format
+      const examQuestions = data.questions.map((q, idx) => ({
+        id: `q-${Date.now()}-${idx}`,
+        text: q.text,
+        type: q.type as 'mcq' | 'true_false' | 'integer',
+        marks: q.marks,
+        orderIndex: idx,
+        options: q.options
+          ? q.options
+              .filter(o => o.text.trim())
+              .map((o, optIdx) => ({
+                id: `opt-${Date.now()}-${idx}-${optIdx}`,
+                text: o.text,
+                isCorrect: o.isCorrect,
+              }))
+          : undefined,
+        correctAnswer:
+          q.type === 'integer'
+            ? Number(q.correctAnswer) || 0
+            : q.type === 'true_false'
+              ? q.options?.find(o => o.isCorrect)?.text === 'True'
+              : q.options?.find(o => o.isCorrect)?.text || '',
+      }));
 
-      if (examError) throw examError;
-
-      // Create questions
-      for (let i = 0; i < data.questions.length; i++) {
-        const q = data.questions[i];
-        
-        const { data: question, error: questionError } = await supabase
-          .from('questions')
-          .insert({
-            exam_id: exam.id,
-            question_text: q.text,
-            question_type: q.type,
-            marks: q.marks,
-            order_index: i,
-            correct_answer: q.type === 'integer' ? q.correctAnswer : null,
-          })
-          .select()
-          .single();
-
-        if (questionError) throw questionError;
-
-        // Create options for MCQ and true/false
-        if ((q.type === 'mcq' || q.type === 'true_false') && q.options) {
-          const optionsToInsert = q.options
-            .filter(o => o.text.trim())
-            .map((o, idx) => ({
-              question_id: question.id,
-              option_text: o.text,
-              is_correct: o.isCorrect,
-              order_index: idx,
-            }));
-
-          if (optionsToInsert.length > 0) {
-            const { error: optionsError } = await supabase
-              .from('options')
-              .insert(optionsToInsert);
-
-            if (optionsError) throw optionsError;
-          }
-        }
-      }
+      // Create exam using localStorage
+      createExam({
+        title: data.title,
+        description: data.description || '',
+        durationMinutes: data.durationMinutes,
+        passingPercentage: data.passingPercentage,
+        createdBy: user.id,
+        status: 'created',
+        questions: examQuestions,
+      });
 
       toast.success('Exam created successfully!');
       navigate('/dashboard/exams');
@@ -162,6 +176,61 @@ export default function CreateExam() {
             <p className="text-muted-foreground mt-1">Design a new examination paper</p>
           </div>
         </div>
+
+        {/* Quick Load Presets */}
+        <Card className="shadow-card border-amber-200 bg-amber-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-amber-600" />
+              Quick Load JEE Templates
+            </CardTitle>
+            <CardDescription>Load a preset exam template to get started quickly</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => loadTemplate('jeePhysics')}
+                disabled={isLoadingTemplate}
+                className="justify-start h-auto flex-col items-start p-3"
+              >
+                <span className="font-semibold">Physics</span>
+                <span className="text-xs text-muted-foreground">8 questions</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => loadTemplate('jeeChemistry')}
+                disabled={isLoadingTemplate}
+                className="justify-start h-auto flex-col items-start p-3"
+              >
+                <span className="font-semibold">Chemistry</span>
+                <span className="text-xs text-muted-foreground">8 questions</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => loadTemplate('jeeMathematics')}
+                disabled={isLoadingTemplate}
+                className="justify-start h-auto flex-col items-start p-3"
+              >
+                <span className="font-semibold">Mathematics</span>
+                <span className="text-xs text-muted-foreground">8 questions</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => loadTemplate('jeeMainMock')}
+                disabled={isLoadingTemplate}
+                className="justify-start h-auto flex-col items-start p-3"
+              >
+                <span className="font-semibold">Full Mock Test</span>
+                <span className="text-xs text-muted-foreground">9 questions</span>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Exam Details */}
         <Card className="shadow-card">

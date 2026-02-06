@@ -67,15 +67,12 @@ export function AuthForm() {
     setIsLoading(false);
 
     if (error) {
-      if (error.message.includes('already registered')) {
-        toast.error('This email is already registered. Please sign in instead.');
-      } else {
-        toast.error(error.message || 'Failed to create account');
-      }
+      toast.error(error.message || 'Failed to create account');
       return;
     }
 
-    toast.success('Account created! Please check your email to verify your account.');
+    toast.success('Account created successfully! Welcome to ExamPro!');
+    navigate('/dashboard');
   }
 
   return (
@@ -212,6 +209,19 @@ export function AuthForm() {
             </form>
           </TabsContent>
         </Tabs>
+        <div className="mt-6 border-t pt-4">
+          <p className="text-xs text-muted-foreground text-center mb-2">Demo Accounts (for testing):</p>
+          <div className="space-y-2 text-xs">
+            <div className="bg-accent/5 p-2 rounded">
+              <p className="font-mono font-medium">Admin: admin@example.com</p>
+              <p className="font-mono text-muted-foreground">Pass: admin123</p>
+            </div>
+            <div className="bg-accent/5 p-2 rounded">
+              <p className="font-mono font-medium">Student: student@example.com</p>
+              <p className="font-mono text-muted-foreground">Pass: student123</p>
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

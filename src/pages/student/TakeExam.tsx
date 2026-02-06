@@ -24,10 +24,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { getExamById, createAttempt, updateAttempt, submitAttempt } from '@/lib/examStorage';
 
 interface Exam {
   id: string;

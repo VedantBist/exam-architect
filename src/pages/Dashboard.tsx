@@ -13,7 +13,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
-import { supabase } from '@/integrations/supabase/client';
+import { getExamStats } from '@/lib/examStorage';
 
 interface DashboardStats {
   totalExams: number;
@@ -36,35 +36,17 @@ export default function Dashboard() {
     fetchStats();
   }, [role, user]);
 
-  async function fetchStats() {
+  function fetchStats() {
     if (!user) return;
 
     try {
-      if (role === 'admin') {
-        const [examsResult, activeResult] = await Promise.all([
-          supabase.from('exams').select('id', { count: 'exact', head: true }),
-          supabase.from('exams').select('id', { count: 'exact', head: true }).eq('status', 'active'),
-        ]);
-
-        setStats({
-          totalExams: examsResult.count || 0,
-          activeExams: activeResult.count || 0,
-          completedAttempts: 0,
-          pendingResults: 0,
-        });
-      } else {
-        const [availableResult, attemptsResult] = await Promise.all([
-          supabase.from('exams').select('id', { count: 'exact', head: true }).in('status', ['scheduled', 'active']),
-          supabase.from('exam_attempts').select('id', { count: 'exact', head: true }).eq('student_id', user.id),
-        ]);
-
-        setStats({
-          totalExams: availableResult.count || 0,
-          activeExams: 0,
-          completedAttempts: attemptsResult.count || 0,
-          pendingResults: 0,
-        });
-      }
+      const examStats = getExamStats();
+      setStats({
+        totalExams: examStats.totalExams,
+        activeExams: examStats.activeExams,
+        completedAttempts: examStats.submittedAttempts,
+        pendingResults: 0,
+      });
     } catch (error) {
       console.error('Error fetching stats:', error);
     } finally {

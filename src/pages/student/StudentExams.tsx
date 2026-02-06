@@ -5,31 +5,29 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { getExams, getAttemptsByStudent } from '@/lib/examStorage';
 
-interface Exam {
+interface DisplayExam {
   id: string;
   title: string;
-  description: string | null;
-  duration_minutes: number;
-  status: 'created' | 'scheduled' | 'active' | 'closed';
-  start_time: string | null;
-  end_time: string | null;
-  passing_percentage: number;
+  description: string;
+  durationMinutes: number;
+  status: 'created' | 'active' | 'archived';
+  passingPercentage: number;
 }
 
-interface ExamAttempt {
+interface StudentAttemptDisplay {
   id: string;
-  exam_id: string;
-  status: 'in_progress' | 'submitted' | 'auto_submitted';
+  examId: string;
+  status: 'in-progress' | 'submitted';
 }
 
 export default function StudentExams() {
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [attempts, setAttempts] = useState<ExamAttempt[]>([]);
+  const [exams, setExams] = useState<DisplayExam[]>([]);
+  const [attempts, setAttempts] = useState<StudentAttemptDisplay[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
@@ -39,25 +37,32 @@ export default function StudentExams() {
     }
   }, [user]);
 
-  async function fetchData() {
+  function fetchData() {
     try {
-      const [examsResult, attemptsResult] = await Promise.all([
-        supabase
-          .from('exams')
-          .select('*')
-          .in('status', ['scheduled', 'active'])
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('exam_attempts')
-          .select('id, exam_id, status')
-          .eq('student_id', user!.id),
-      ]);
-
-      if (examsResult.error) throw examsResult.error;
-      if (attemptsResult.error) throw attemptsResult.error;
-
-      setExams(examsResult.data || []);
-      setAttempts(attemptsResult.data || []);
+      const allExams = getExams();
+      // Filter to show active exams
+      const activeExams = allExams
+        .filter(e => e.status === 'active')
+        .map(e => ({
+          id: e.id,
+          title: e.title,
+          description: e.description,
+          durationMinutes: e.durationMinutes,
+          status: e.status,
+          passingPercentage: e.passingPercentage,
+        }));
+      
+      setExams(activeExams);
+      
+      // Get student attempts
+      if (user) {
+        const studentAttempts = getAttemptsByStudent(user.id).map(a => ({
+          id: a.id,
+          examId: a.examId,
+          status: a.status,
+        }));
+        setAttempts(studentAttempts);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to load exams');
@@ -67,14 +72,14 @@ export default function StudentExams() {
   }
 
   function getAttemptForExam(examId: string) {
-    return attempts.find(a => a.exam_id === examId);
+    return attempts.find(a => a.examId === examId);
   }
 
-  function getExamAction(exam: Exam) {
+  function getExamAction(exam: DisplayExam) {
     const attempt = getAttemptForExam(exam.id);
 
     if (attempt) {
-      if (attempt.status === 'in_progress') {
+      if (attempt.status === 'in-progress') {
         return { label: 'Resume', variant: 'default' as const, disabled: false };
       }
       return { label: 'Completed', variant: 'outline' as const, disabled: true };
