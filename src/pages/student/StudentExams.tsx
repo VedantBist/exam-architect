@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 import { getExams, getAttemptsByStudent } from '@/lib/examStorage';
 
 interface DisplayExam {
@@ -32,44 +31,37 @@ export default function StudentExams() {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (user) {
-      fetchData();
+    if (!user) {
+      setLoading(false);
+      return;
     }
-  }, [user]);
 
-  function fetchData() {
     try {
-      const allExams = getExams();
-      // Filter to show active exams
-      const activeExams = allExams
-        .filter(e => e.status === 'active')
-        .map(e => ({
-          id: e.id,
-          title: e.title,
-          description: e.description,
-          durationMinutes: e.durationMinutes,
-          status: e.status,
-          passingPercentage: e.passingPercentage,
+      const activeExams = getExams()
+        .filter((exam) => exam.status === 'active')
+        .map((exam) => ({
+          id: exam.id,
+          title: exam.title,
+          description: exam.description,
+          durationMinutes: exam.durationMinutes,
+          status: exam.status,
+          passingPercentage: exam.passingPercentage,
         }));
-      
       setExams(activeExams);
-      
-      // Get student attempts
-      if (user) {
-        const studentAttempts = getAttemptsByStudent(user.id).map(a => ({
-          id: a.id,
-          examId: a.examId,
-          status: a.status,
-        }));
-        setAttempts(studentAttempts);
-      }
+
+      const studentAttempts = getAttemptsByStudent(user.id).map((attempt) => ({
+        id: attempt.id,
+        examId: attempt.examId,
+        status: attempt.status,
+      }));
+      setAttempts(studentAttempts);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to load exams');
     } finally {
       setLoading(false);
     }
-  }
+  }, [user]);
 
   function getAttemptForExam(examId: string) {
     return attempts.find(a => a.examId === examId);
@@ -161,16 +153,16 @@ export default function StudentExams() {
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Clock className="h-4 w-4" />
-                        {exam.duration_minutes} min
+                        {exam.durationMinutes} min
                       </div>
                       <div className="text-muted-foreground">
-                        Pass: {exam.passing_percentage}%
+                        Pass: {exam.passingPercentage}%
                       </div>
                     </div>
 
                     {attempt && (
                       <div className="text-sm">
-                        {attempt.status === 'in_progress' ? (
+                        {attempt.status === 'in-progress' ? (
                           <span className="text-warning flex items-center gap-1">
                             <Clock className="h-3 w-3" />
                             In Progress
