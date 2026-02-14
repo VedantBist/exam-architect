@@ -27,6 +27,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { getBackendErrorMessage } from '@/lib/backendClient';
 import {
   createAttempt,
   getAttemptsByStudent,
@@ -66,6 +67,8 @@ export default function TakeExam() {
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const submittingRef = useRef(false);
+  const submittedAttemptsRef = useRef<Set<string>>(new Set());
   const attemptId = attempt?.id;
   const attemptStatus = attempt?.status;
 
@@ -73,10 +76,14 @@ export default function TakeExam() {
     async (attemptId: string, isAutoSubmit = false, examOverride?: StoredExam) => {
       const activeExam = examOverride ?? exam;
       if (!activeExam) return;
+      if (submittingRef.current) return;
+      if (submittedAttemptsRef.current.has(attemptId)) return;
 
+      submittedAttemptsRef.current.add(attemptId);
+      submittingRef.current = true;
       setSubmitting(true);
       try {
-        const submittedAttempt = submitAttempt(attemptId, activeExam);
+        const submittedAttempt = await submitAttempt(attemptId, activeExam);
         if (!submittedAttempt) {
           throw new Error('Attempt not found');
         }
@@ -85,9 +92,11 @@ export default function TakeExam() {
         toast.success(isAutoSubmit ? 'Time up! Exam auto-submitted' : 'Exam submitted successfully!');
         navigate('/dashboard/my-results');
       } catch (error) {
+        submittedAttemptsRef.current.delete(attemptId);
         console.error('Error submitting exam:', error);
-        toast.error('Failed to submit exam');
+        toast.error(getBackendErrorMessage(error, 'Failed to submit exam'));
       } finally {
+        submittingRef.current = false;
         setSubmitting(false);
         setShowSubmitDialog(false);
       }
@@ -102,7 +111,7 @@ export default function TakeExam() {
         return;
       }
 
-      const examData = getExamById(examId);
+      const examData = await getExamById(examId);
       if (!examData) {
         toast.error('Exam not found');
         navigate('/dashboard/my-exams');
@@ -117,7 +126,8 @@ export default function TakeExam() {
 
       setExam(examData);
 
-      const existingAttempt = getAttemptsByStudent(user.id).find((a) => a.examId === examId);
+      const attempts = await getAttemptsByStudent(user.id);
+      const existingAttempt = attempts.find((a) => a.examId === examId);
       if (existingAttempt && existingAttempt.status === 'submitted') {
         toast.info('You have already completed this exam');
         navigate('/dashboard/my-results');
@@ -125,7 +135,7 @@ export default function TakeExam() {
       }
 
       const currentAttempt =
-        existingAttempt ?? createAttempt(examId, user.id, user.fullName, examData);
+        existingAttempt ?? await createAttempt(examId, user.id, user.fullName, examData);
 
       const remainingTime = getRemainingTimeInSeconds(currentAttempt, examData.durationMinutes);
       if (remainingTime <= 0 && currentAttempt.status === 'in-progress') {
@@ -137,7 +147,7 @@ export default function TakeExam() {
       setTimeLeft(remainingTime);
     } catch (error) {
       console.error('Error initializing exam:', error);
-      toast.error('Failed to load exam');
+      toast.error(getBackendErrorMessage(error, 'Failed to load exam'));
       navigate('/dashboard/my-exams');
     } finally {
       setLoading(false);
@@ -170,10 +180,10 @@ export default function TakeExam() {
     };
   }, [attemptId, attemptStatus, submitExam]);
 
-  function saveAnswer(questionId: string, value: string | number | boolean) {
+  async function saveAnswer(questionId: string, value: string | number | boolean) {
     if (!attempt) return;
 
-    const updatedAttempt = updateAttempt(attempt.id, {
+    const updatedAttempt = await updateAttempt(attempt.id, {
       answers: {
         ...attempt.answers,
         [questionId]: value,
@@ -182,6 +192,8 @@ export default function TakeExam() {
 
     if (updatedAttempt) {
       setAttempt(updatedAttempt);
+    } else {
+      toast.error('Attempt not found');
     }
   }
 
@@ -265,7 +277,7 @@ export default function TakeExam() {
                     onValueChange={(value) => {
                       const selected = currentQuestion.options?.find((option) => option.id === value);
                       if (selected) {
-                        saveAnswer(currentQuestion.id, selected.text);
+                        void saveAnswer(currentQuestion.id, selected.text);
                       }
                     }}
                     className="space-y-3"
@@ -298,7 +310,7 @@ export default function TakeExam() {
                           ? 'false'
                           : ''
                     }
-                    onValueChange={(value) => saveAnswer(currentQuestion.id, value === 'true')}
+                    onValueChange={(value) => void saveAnswer(currentQuestion.id, value === 'true')}
                     className="space-y-3"
                   >
                     {TRUE_FALSE_OPTIONS.map((option) => {
@@ -334,7 +346,7 @@ export default function TakeExam() {
                       type="text"
                       placeholder="Enter your numeric answer"
                       value={currentAnswer !== undefined ? String(currentAnswer) : ''}
-                      onChange={(e) => saveAnswer(currentQuestion.id, e.target.value)}
+                      onChange={(e) => void saveAnswer(currentQuestion.id, e.target.value)}
                       className="max-w-xs"
                     />
                   </div>

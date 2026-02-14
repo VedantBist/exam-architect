@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   FileText, 
@@ -32,15 +32,14 @@ export default function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchStats();
-  }, [role, user]);
-
-  function fetchStats() {
-    if (!user) return;
+  const fetchStats = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     try {
-      const examStats = getExamStats();
+      const examStats = await getExamStats();
       setStats({
         totalExams: examStats.totalExams,
         activeExams: examStats.activeExams,
@@ -52,7 +51,11 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [user]);
+
+  useEffect(() => {
+    void fetchStats();
+  }, [fetchStats, role]);
 
   if (role === 'admin') {
     return (

@@ -4,7 +4,7 @@ A comprehensive exam management and testing platform built with modern web techn
 
 ## Features
 
-- **User Authentication**: Secure login system powered by Supabase with role-based access control
+- **User Authentication**: Role-based login/signup flows for admin and student users
 - **Admin Dashboard**: Create, manage, and monitor exams with comprehensive analytics
 - **Student Dashboard**: View available exams, take exams, and track results
 - **Exam Creation**: Intuitive interface for creating exams with multiple question types
@@ -18,7 +18,7 @@ A comprehensive exam management and testing platform built with modern web techn
 - **Build Tool**: Vite
 - **UI Framework**: shadcn-ui + Radix UI
 - **Styling**: Tailwind CSS
-- **Backend**: Supabase (PostgreSQL + Auth)
+- **Backend**: Local mode (browser storage) or Spring Boot API (`backend/`)
 - **Testing**: Vitest
 - **Code Quality**: ESLint
 
@@ -28,7 +28,7 @@ A comprehensive exam management and testing platform built with modern web techn
 
 - Node.js (v16 or higher)
 - npm or Bun package manager
-- Supabase account (for database and auth)
+- Java 21 + Maven (for Spring Boot backend mode)
 
 ### Installation
 
@@ -44,9 +44,8 @@ npm install
 # or
 bun install
 
-# Configure environment variables
-cp .env.example .env.local
-# Add your Supabase credentials to .env.local
+# Configure environment variables (optional for API mode)
+cp .env .env.local
 ```
 
 ### Development
@@ -59,6 +58,19 @@ bun run dev
 ```
 
 The application will be available at `http://localhost:5173`
+
+### Backend API Mode (Spring Boot)
+
+By default, frontend runs in local mode. To route data to Spring Boot backend, set:
+
+```bash
+VITE_BACKEND_MODE=api
+VITE_BACKEND_URL=http://localhost:8080/api/v1
+```
+
+If `VITE_BACKEND_MODE` is omitted (or set to `local`), the app uses localStorage fallback.
+
+To run Spring Boot backend, see `backend/README.md`.
 
 ### Build
 
@@ -95,7 +107,7 @@ src/
 ├── lib/               # Utility functions and helpers
 ├── hooks/             # Custom React hooks
 ├── data/              # Static data and seeds
-└── integrations/      # External service integrations (Supabase)
+└── integrations/      # External service integrations
 ```
 
 ## Configuration
@@ -105,21 +117,17 @@ src/
 Create a `.env.local` file in the root directory:
 
 ```
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_BACKEND_MODE=local
+VITE_BACKEND_URL=http://localhost:8080/api/v1
 ```
-
-### Supabase Setup
-
-1. Create a Supabase project at https://supabase.com
-2. Run migrations from `supabase/migrations/`
-3. Configure auth policies for students and admins
 
 ## Documentation
 
 - [Authentication System](./AUTH_SYSTEM.md) - Detailed auth architecture
 - [Project Report](./PROJECT_REPORT.md) - Comprehensive project overview
 - [Quick Reference](./QUICK_REF.md) - Quick commands and tips
+- [Backend Migration Checklist](./docs/backend-migration/migration-checklist.md) - Phase-by-phase parity tracker
+- [Cutover Runbook](./docs/backend-migration/cutover-runbook.md) - Staging/prod deploy, monitoring, rollback
 
 ## Contributing
 

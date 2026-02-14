@@ -1,0 +1,737 @@
+openapi: 3.0.3
+info:
+  title: Exam Architect API
+  version: 1.0.0
+  description: Contract-first API for Exam Architect parity migration.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: Health
+  - name: Auth
+  - name: Exams
+  - name: Attempts
+  - name: Stats
+paths:
+  /api/v1/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      operationId: getHealth
+      responses:
+        '200':
+          description: API healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                required: [status]
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in user
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+  /api/v1/auth/signup:
+    post:
+      tags: [Auth]
+      summary: Register user
+      operationId: signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '200':
+          description: Signup success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Sign out user
+      operationId: logout
+      responses:
+        '204':
+          description: Logout success
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Resolve current user from header context
+      operationId: me
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+      responses:
+        '200':
+          description: Current user context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+  /api/v1/exams:
+    get:
+      tags: [Exams]
+      summary: List exams
+      operationId: listExams
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+      responses:
+        '200':
+          description: Exam list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExamSummary'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+    post:
+      tags: [Exams]
+      summary: Create exam (admin)
+      operationId: createExam
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExamRequest'
+      responses:
+        '200':
+          description: Created exam
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Exam'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/v1/exams/{examId}:
+    get:
+      tags: [Exams]
+      summary: Get exam by id
+      operationId: getExamById
+      parameters:
+        - $ref: '#/components/parameters/ExamId'
+        - $ref: '#/components/parameters/XUserId'
+      responses:
+        '200':
+          description: Exam details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Exam'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/ExamNotFoundError'
+    patch:
+      tags: [Exams]
+      summary: Update exam (admin)
+      operationId: updateExam
+      parameters:
+        - $ref: '#/components/parameters/ExamId'
+        - $ref: '#/components/parameters/XUserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateExamRequest'
+      responses:
+        '200':
+          description: Updated exam
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Exam'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/ExamNotFoundError'
+    delete:
+      tags: [Exams]
+      summary: Delete exam (admin)
+      operationId: deleteExam
+      parameters:
+        - $ref: '#/components/parameters/ExamId'
+        - $ref: '#/components/parameters/XUserId'
+      responses:
+        '204':
+          description: Exam deleted
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/ExamNotFoundError'
+  /api/v1/attempts:
+    get:
+      tags: [Attempts]
+      summary: List attempts for student
+      operationId: listAttemptsByStudent
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+        - name: studentId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Student attempts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StudentAttempt'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      tags: [Attempts]
+      summary: Create attempt (student)
+      operationId: createAttempt
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAttemptRequest'
+      responses:
+        '200':
+          description: Attempt created or existing attempt returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentAttempt'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/ExamNotFoundError'
+  /api/v1/attempts/exam/{examId}:
+    get:
+      tags: [Attempts]
+      summary: Get attempt by exam and student
+      operationId: getAttemptByExamAndStudent
+      parameters:
+        - $ref: '#/components/parameters/ExamId'
+        - $ref: '#/components/parameters/XUserId'
+        - name: studentId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Attempt found or null
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/StudentAttempt'
+                nullable: true
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/v1/attempts/{attemptId}:
+    patch:
+      tags: [Attempts]
+      summary: Update in-progress attempt answers
+      operationId: updateAttempt
+      parameters:
+        - $ref: '#/components/parameters/AttemptId'
+        - $ref: '#/components/parameters/XUserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAttemptRequest'
+      responses:
+        '200':
+          description: Updated attempt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentAttempt'
+        '400':
+          description: Attempt already submitted or invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/AttemptNotFoundError'
+  /api/v1/attempts/{attemptId}/submit:
+    post:
+      tags: [Attempts]
+      summary: Submit attempt and compute score
+      operationId: submitAttempt
+      parameters:
+        - $ref: '#/components/parameters/AttemptId'
+        - $ref: '#/components/parameters/XUserId'
+      responses:
+        '200':
+          description: Submitted attempt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentAttempt'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/AttemptNotFoundError'
+  /api/v1/stats/exams:
+    get:
+      tags: [Stats]
+      summary: Aggregated exam stats for dashboard
+      operationId: getExamStats
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+      responses:
+        '200':
+          description: Exam stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExamStats'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+components:
+  parameters:
+    XUserId:
+      name: X-User-Id
+      in: header
+      required: true
+      schema:
+        type: string
+    ExamId:
+      name: examId
+      in: path
+      required: true
+      schema:
+        type: string
+    AttemptId:
+      name: attemptId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          examples:
+            invalid:
+              value:
+                code: VALIDATION_ERROR
+                message: Validation failed
+                details:
+                  email: Email is required
+    UnauthorizedError:
+      description: Missing or invalid user context
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          examples:
+            unauthorized:
+              value:
+                code: AUTH_UNAUTHORIZED
+                message: Missing user context
+                details: null
+    ForbiddenError:
+      description: User does not have permission for this action
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          examples:
+            forbidden:
+              value:
+                code: AUTH_FORBIDDEN
+                message: Admin role is required
+                details: null
+    ExamNotFoundError:
+      description: Exam not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          examples:
+            examNotFound:
+              value:
+                code: EXAM_NOT_FOUND
+                message: Exam not found
+                details: null
+    AttemptNotFoundError:
+      description: Attempt not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          examples:
+            attemptNotFound:
+              value:
+                code: ATTEMPT_NOT_FOUND
+                message: Attempt not found
+                details: null
+  schemas:
+    ApiError:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          nullable: true
+      required: [code, message]
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+        role:
+          type: string
+          enum: [admin, student]
+      required: [id, email, fullName, role]
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/AuthUser'
+      required: [user]
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [email, password]
+    SignupRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+          minLength: 2
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        role:
+          type: string
+          enum: [admin, student]
+      required: [fullName, email, password, role]
+    ExamOption:
+      type: object
+      properties:
+        id:
+          type: string
+        text:
+          type: string
+        isCorrect:
+          type: boolean
+      required: [id, text, isCorrect]
+    ExamQuestion:
+      type: object
+      properties:
+        id:
+          type: string
+        text:
+          type: string
+        type:
+          type: string
+          enum: [mcq, true_false, integer]
+        marks:
+          type: integer
+        orderIndex:
+          type: integer
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExamOption'
+        correctAnswer:
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
+          nullable: true
+      required: [id, text, type, marks, orderIndex]
+    ExamSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        durationMinutes:
+          type: integer
+        passingPercentage:
+          type: integer
+        createdBy:
+          type: string
+        status:
+          type: string
+          enum: [created, active, archived]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - description
+        - durationMinutes
+        - passingPercentage
+        - createdBy
+        - status
+        - createdAt
+        - updatedAt
+    Exam:
+      allOf:
+        - $ref: '#/components/schemas/ExamSummary'
+        - type: object
+          properties:
+            questions:
+              type: array
+              items:
+                $ref: '#/components/schemas/ExamQuestion'
+          required: [questions]
+    CreateExamOptionRequest:
+      type: object
+      properties:
+        id:
+          type: string
+        text:
+          type: string
+        isCorrect:
+          type: boolean
+        orderIndex:
+          type: integer
+      required: [text, isCorrect]
+    CreateExamQuestionRequest:
+      type: object
+      properties:
+        id:
+          type: string
+        text:
+          type: string
+        type:
+          type: string
+          enum: [mcq, true_false, integer]
+        marks:
+          type: integer
+          minimum: 1
+        orderIndex:
+          type: integer
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateExamOptionRequest'
+        correctAnswer:
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
+          nullable: true
+      required: [text, type, marks]
+    CreateExamRequest:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        durationMinutes:
+          type: integer
+          minimum: 1
+          maximum: 480
+        passingPercentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+        createdBy:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum: [created, active, archived]
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateExamQuestionRequest'
+      required: [title, durationMinutes, passingPercentage, createdBy]
+    UpdateExamRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        durationMinutes:
+          type: integer
+          minimum: 1
+          maximum: 480
+        passingPercentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+        status:
+          type: string
+          enum: [created, active, archived]
+    StudentAttempt:
+      type: object
+      properties:
+        id:
+          type: string
+        examId:
+          type: string
+        studentId:
+          type: string
+        studentName:
+          type: string
+        answers:
+          type: object
+          additionalProperties:
+            oneOf:
+              - type: string
+              - type: number
+              - type: boolean
+        score:
+          type: integer
+        totalMarks:
+          type: integer
+        percentage:
+          type: number
+        status:
+          type: string
+          enum: [in-progress, submitted]
+        startedAt:
+          type: string
+          format: date-time
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - examId
+        - studentId
+        - studentName
+        - answers
+        - score
+        - totalMarks
+        - percentage
+        - status
+        - startedAt
+    CreateAttemptRequest:
+      type: object
+      properties:
+        examId:
+          type: string
+        studentId:
+          type: string
+        studentName:
+          type: string
+      required: [examId, studentId, studentName]
+    UpdateAttemptRequest:
+      type: object
+      properties:
+        answers:
+          type: object
+          additionalProperties:
+            oneOf:
+              - type: string
+              - type: number
+              - type: boolean
+    ExamStats:
+      type: object
+      properties:
+        totalExams:
+          type: integer
+        activeExams:
+          type: integer
+        totalAttempts:
+          type: integer
+        submittedAttempts:
+          type: integer
+      required: [totalExams, activeExams, totalAttempts, submittedAttempts]

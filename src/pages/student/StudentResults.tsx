@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/lib/auth';
 import { getAttemptsByStudent, getExamById } from '@/lib/examStorage';
+import { toast } from 'sonner';
+import { getBackendErrorMessage } from '@/lib/backendClient';
 
 interface DisplayResult {
   id: string;
@@ -27,38 +29,46 @@ export default function StudentResults() {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+    async function fetchResults() {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-    try {
-      const displayResults = getAttemptsByStudent(user.id)
-        .filter((attempt) => attempt.status === 'submitted' && attempt.submittedAt)
-        .map((attempt) => {
-          const exam = getExamById(attempt.examId);
-          const passingPercentage = exam?.passingPercentage ?? 40;
+      try {
+        const submittedAttempts = (await getAttemptsByStudent(user.id))
+          .filter((attempt) => attempt.status === 'submitted' && attempt.submittedAt);
 
-          return {
-            id: attempt.id,
-            examId: attempt.examId,
-            examTitle: exam?.title ?? 'Unknown Exam',
-            score: attempt.score,
-            totalMarks: attempt.totalMarks,
-            percentage: attempt.percentage,
-            passed: attempt.percentage >= passingPercentage,
-            passingPercentage,
-            submittedAt: attempt.submittedAt!,
-          };
-        })
+        const displayResults = await Promise.all(
+          submittedAttempts.map(async (attempt) => {
+            const exam = await getExamById(attempt.examId);
+            const passingPercentage = exam?.passingPercentage ?? 40;
+
+            return {
+              id: attempt.id,
+              examId: attempt.examId,
+              examTitle: exam?.title ?? 'Unknown Exam',
+              score: attempt.score,
+              totalMarks: attempt.totalMarks,
+              percentage: attempt.percentage,
+              passed: attempt.percentage >= passingPercentage,
+              passingPercentage,
+              submittedAt: attempt.submittedAt!,
+            };
+          })
+        )
         .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
 
-      setResults(displayResults);
-    } catch (error) {
-      console.error('Error fetching results:', error);
-    } finally {
-      setLoading(false);
+        setResults(displayResults);
+      } catch (error) {
+        console.error('Error fetching results:', error);
+        toast.error(getBackendErrorMessage(error, 'Failed to load results'));
+      } finally {
+        setLoading(false);
+      }
     }
+
+    void fetchResults();
   }, [user]);
 
   const averageScore =

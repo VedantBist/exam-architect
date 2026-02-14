@@ -1,7 +1,11 @@
 /**
- * Local storage-based exam management system
- * Independent of any backend, uses localStorage and in-memory data
+ * Exam storage abstraction.
+ *
+ * - Local mode: localStorage-backed behavior (current baseline)
+ * - API mode: Spring Boot backend (contract-compatible)
  */
+
+import { BackendApiError, fetchBackend, isBackendApiMode } from '@/lib/backendClient';
 
 export interface ExamOption {
   id: string;
@@ -46,10 +50,29 @@ export interface StudentAttempt {
   submittedAt?: string;
 }
 
+interface ExamStats {
+  totalExams: number;
+  activeExams: number;
+  totalAttempts: number;
+  submittedAttempts: number;
+}
+
+interface ExamSummaryApi {
+  id: string;
+  title: string;
+  description: string;
+  durationMinutes: number;
+  passingPercentage: number;
+  createdBy: string;
+  status: 'created' | 'active' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+}
+
 const EXAMS_KEY = 'exams_storage';
 const ATTEMPTS_KEY = 'attempts_storage';
 
-// Initialize with sample exams
+// Local-mode implementations
 function initializeSampleExams(): Exam[] {
   return [
     {
@@ -133,75 +156,30 @@ function initializeSampleExams(): Exam[] {
   ];
 }
 
-export function getExams(): Exam[] {
+function getExamsLocal(): Exam[] {
   try {
     const stored = localStorage.getItem(EXAMS_KEY);
     if (stored) {
-      return JSON.parse(stored);
+      return JSON.parse(stored) as Exam[];
     }
   } catch (error) {
     console.error('Error loading exams from localStorage:', error);
   }
-  
-  // Initialize with sample exams if none exist
+
   const samples = initializeSampleExams();
   localStorage.setItem(EXAMS_KEY, JSON.stringify(samples));
   return samples;
 }
 
-export function getExamById(examId: string): Exam | null {
-  const exams = getExams();
-  return exams.find(e => e.id === examId) || null;
-}
-
-export function getExamsByAdmin(adminId: string): Exam[] {
-  const exams = getExams();
-  return exams.filter(e => e.createdBy === adminId);
-}
-
-export function createExam(exam: Omit<Exam, 'id' | 'createdAt' | 'updatedAt'>): Exam {
-  const exams = getExams();
-  const newExam: Exam = {
-    ...exam,
-    id: `exam-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  exams.push(newExam);
+function saveExamsLocal(exams: Exam[]) {
   localStorage.setItem(EXAMS_KEY, JSON.stringify(exams));
-  return newExam;
 }
 
-export function updateExam(examId: string, updates: Partial<Exam>): Exam | null {
-  const exams = getExams();
-  const index = exams.findIndex(e => e.id === examId);
-  if (index === -1) return null;
-
-  exams[index] = {
-    ...exams[index],
-    ...updates,
-    updatedAt: new Date().toISOString(),
-  };
-  localStorage.setItem(EXAMS_KEY, JSON.stringify(exams));
-  return exams[index];
-}
-
-export function deleteExam(examId: string): boolean {
-  const exams = getExams();
-  const index = exams.findIndex(e => e.id === examId);
-  if (index === -1) return false;
-
-  exams.splice(index, 1);
-  localStorage.setItem(EXAMS_KEY, JSON.stringify(exams));
-  return true;
-}
-
-// Student Attempts
-export function getAttempts(): StudentAttempt[] {
+function getAttemptsLocal(): StudentAttempt[] {
   try {
     const stored = localStorage.getItem(ATTEMPTS_KEY);
     if (stored) {
-      return JSON.parse(stored);
+      return JSON.parse(stored) as StudentAttempt[];
     }
   } catch (error) {
     console.error('Error loading attempts from localStorage:', error);
@@ -209,18 +187,175 @@ export function getAttempts(): StudentAttempt[] {
   return [];
 }
 
-export function getAttemptsByStudent(studentId: string): StudentAttempt[] {
-  const attempts = getAttempts();
-  return attempts.filter(a => a.studentId === studentId);
+function saveAttemptsLocal(attempts: StudentAttempt[]) {
+  localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(attempts));
 }
 
-export function getAttemptsByExam(examId: string): StudentAttempt[] {
-  const attempts = getAttempts();
-  return attempts.filter(a => a.examId === examId);
+function toExamFromSummary(summary: ExamSummaryApi): Exam {
+  return {
+    ...summary,
+    questions: [],
+  };
 }
 
-export function createAttempt(examId: string, studentId: string, studentName: string, exam: Exam): StudentAttempt {
-  const attempts = getAttempts();
+function toExamFromApi(exam: Exam): Exam {
+  return {
+    ...exam,
+    questions: (exam.questions || []).map((question, idx) => ({
+      ...question,
+      orderIndex: question.orderIndex ?? idx,
+      options: question.options || [],
+    })),
+  };
+}
+
+function isNotFoundError(error: unknown): boolean {
+  return error instanceof BackendApiError && error.status === 404;
+}
+
+export async function getExams(): Promise<Exam[]> {
+  if (isBackendApiMode()) {
+    const response = await fetchBackend<ExamSummaryApi[]>('/exams');
+    return response.map(toExamFromSummary);
+  }
+
+  return getExamsLocal();
+}
+
+export async function getExamById(examId: string): Promise<Exam | null> {
+  if (isBackendApiMode()) {
+    try {
+      const response = await fetchBackend<Exam>(`/exams/${examId}`);
+      return toExamFromApi(response);
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  return getExamsLocal().find((exam) => exam.id === examId) || null;
+}
+
+export async function getExamsByAdmin(adminId: string): Promise<Exam[]> {
+  const exams = await getExams();
+  return exams.filter((exam) => exam.createdBy === adminId);
+}
+
+export async function createExam(exam: Omit<Exam, 'id' | 'createdAt' | 'updatedAt'>): Promise<Exam> {
+  if (isBackendApiMode()) {
+    const response = await fetchBackend<Exam>('/exams', {
+      method: 'POST',
+      body: JSON.stringify(exam),
+    });
+    return toExamFromApi(response);
+  }
+
+  const exams = getExamsLocal();
+  const newExam: Exam = {
+    ...exam,
+    id: `exam-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  exams.push(newExam);
+  saveExamsLocal(exams);
+  return newExam;
+}
+
+export async function updateExam(examId: string, updates: Partial<Exam>): Promise<Exam | null> {
+  if (isBackendApiMode()) {
+    try {
+      const response = await fetchBackend<Exam>(`/exams/${examId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      });
+      return toExamFromApi(response);
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  const exams = getExamsLocal();
+  const index = exams.findIndex((exam) => exam.id === examId);
+  if (index === -1) return null;
+
+  exams[index] = {
+    ...exams[index],
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+  saveExamsLocal(exams);
+  return exams[index];
+}
+
+export async function deleteExam(examId: string): Promise<boolean> {
+  if (isBackendApiMode()) {
+    try {
+      await fetchBackend<void>(`/exams/${examId}`, { method: 'DELETE' });
+      return true;
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  const exams = getExamsLocal();
+  const index = exams.findIndex((exam) => exam.id === examId);
+  if (index === -1) return false;
+
+  exams.splice(index, 1);
+  saveExamsLocal(exams);
+  return true;
+}
+
+export async function getAttempts(studentId?: string): Promise<StudentAttempt[]> {
+  if (isBackendApiMode()) {
+    if (!studentId) {
+      return [];
+    }
+    return fetchBackend<StudentAttempt[]>(`/attempts?studentId=${encodeURIComponent(studentId)}`);
+  }
+
+  return getAttemptsLocal();
+}
+
+export async function getAttemptsByStudent(studentId: string): Promise<StudentAttempt[]> {
+  if (isBackendApiMode()) {
+    return fetchBackend<StudentAttempt[]>(`/attempts?studentId=${encodeURIComponent(studentId)}`);
+  }
+
+  return getAttemptsLocal().filter((attempt) => attempt.studentId === studentId);
+}
+
+export async function getAttemptsByExam(examId: string): Promise<StudentAttempt[]> {
+  if (isBackendApiMode()) {
+    return [];
+  }
+
+  return getAttemptsLocal().filter((attempt) => attempt.examId === examId);
+}
+
+export async function createAttempt(
+  examId: string,
+  studentId: string,
+  studentName: string,
+  exam: Exam
+): Promise<StudentAttempt> {
+  if (isBackendApiMode()) {
+    return fetchBackend<StudentAttempt>('/attempts', {
+      method: 'POST',
+      body: JSON.stringify({ examId, studentId, studentName }),
+    });
+  }
+
+  const attempts = getAttemptsLocal();
   const newAttempt: StudentAttempt = {
     id: `attempt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     examId,
@@ -228,38 +363,65 @@ export function createAttempt(examId: string, studentId: string, studentName: st
     studentName,
     answers: {},
     score: 0,
-    totalMarks: exam.questions.reduce((sum, q) => sum + q.marks, 0),
+    totalMarks: exam.questions.reduce((sum, question) => sum + question.marks, 0),
     percentage: 0,
     status: 'in-progress',
     startedAt: new Date().toISOString(),
   };
   attempts.push(newAttempt);
-  localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(attempts));
+  saveAttemptsLocal(attempts);
   return newAttempt;
 }
 
-export function updateAttempt(attemptId: string, updates: Partial<StudentAttempt>): StudentAttempt | null {
-  const attempts = getAttempts();
-  const index = attempts.findIndex(a => a.id === attemptId);
+export async function updateAttempt(attemptId: string, updates: Partial<StudentAttempt>): Promise<StudentAttempt | null> {
+  if (isBackendApiMode()) {
+    try {
+      const response = await fetchBackend<StudentAttempt>(`/attempts/${attemptId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ answers: updates.answers ?? {} }),
+      });
+      return response;
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  const attempts = getAttemptsLocal();
+  const index = attempts.findIndex((attempt) => attempt.id === attemptId);
   if (index === -1) return null;
 
   attempts[index] = {
     ...attempts[index],
     ...updates,
   };
-  localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(attempts));
+  saveAttemptsLocal(attempts);
   return attempts[index];
 }
 
-export function submitAttempt(attemptId: string, exam: Exam): StudentAttempt | null {
-  const attempt = getAttempts().find(a => a.id === attemptId);
+export async function submitAttempt(attemptId: string, exam: Exam): Promise<StudentAttempt | null> {
+  if (isBackendApiMode()) {
+    try {
+      return await fetchBackend<StudentAttempt>(`/attempts/${attemptId}/submit`, {
+        method: 'POST',
+      });
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  const attempt = getAttemptsLocal().find((candidate) => candidate.id === attemptId);
   if (!attempt) return null;
 
   let score = 0;
   for (const question of exam.questions) {
     const answer = attempt.answers[question.id];
-    const isCorrect = checkAnswer(question, answer);
-    if (isCorrect) {
+    if (checkAnswer(question, answer)) {
       score += question.marks;
     }
   }
@@ -274,21 +436,26 @@ export function submitAttempt(attemptId: string, exam: Exam): StudentAttempt | n
   });
 }
 
-export function checkAnswer(question: ExamQuestion, answer: any): boolean {
+export function checkAnswer(question: ExamQuestion, answer: unknown): boolean {
   if (question.type === 'integer') {
     return Number(answer) === question.correctAnswer;
   }
+
   return answer === question.correctAnswer;
 }
 
-export function getExamStats() {
-  const exams = getExams();
-  const attempts = getAttempts();
-  
+export async function getExamStats(): Promise<ExamStats> {
+  if (isBackendApiMode()) {
+    return fetchBackend<ExamStats>('/stats/exams');
+  }
+
+  const exams = getExamsLocal();
+  const attempts = getAttemptsLocal();
+
   return {
     totalExams: exams.length,
-    activeExams: exams.filter(e => e.status === 'active').length,
+    activeExams: exams.filter((exam) => exam.status === 'active').length,
     totalAttempts: attempts.length,
-    submittedAttempts: attempts.filter(a => a.status === 'submitted').length,
+    submittedAttempts: attempts.filter((attempt) => attempt.status === 'submitted').length,
   };
 }

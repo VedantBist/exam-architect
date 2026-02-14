@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
 import { getExams, getAttemptsByStudent } from '@/lib/examStorage';
+import { getBackendErrorMessage } from '@/lib/backendClient';
 
 interface DisplayExam {
   id: string;
@@ -31,36 +32,40 @@ export default function StudentExams() {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+    async function fetchData() {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-    try {
-      const activeExams = getExams()
-        .filter((exam) => exam.status === 'active')
-        .map((exam) => ({
-          id: exam.id,
-          title: exam.title,
-          description: exam.description,
-          durationMinutes: exam.durationMinutes,
-          status: exam.status,
-          passingPercentage: exam.passingPercentage,
+      try {
+        const activeExams = (await getExams())
+          .filter((exam) => exam.status === 'active')
+          .map((exam) => ({
+            id: exam.id,
+            title: exam.title,
+            description: exam.description,
+            durationMinutes: exam.durationMinutes,
+            status: exam.status,
+            passingPercentage: exam.passingPercentage,
+          }));
+        setExams(activeExams);
+
+        const studentAttempts = (await getAttemptsByStudent(user.id)).map((attempt) => ({
+          id: attempt.id,
+          examId: attempt.examId,
+          status: attempt.status,
         }));
-      setExams(activeExams);
-
-      const studentAttempts = getAttemptsByStudent(user.id).map((attempt) => ({
-        id: attempt.id,
-        examId: attempt.examId,
-        status: attempt.status,
-      }));
-      setAttempts(studentAttempts);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Failed to load exams');
-    } finally {
-      setLoading(false);
+        setAttempts(studentAttempts);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        toast.error(getBackendErrorMessage(error, 'Failed to load exams'));
+      } finally {
+        setLoading(false);
+      }
     }
+
+    void fetchData();
   }, [user]);
 
   function getAttemptForExam(examId: string) {

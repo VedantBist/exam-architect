@@ -35,6 +35,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { getExams, deleteExam } from '@/lib/examStorage';
 import { useAuth } from '@/lib/auth';
+import { getBackendErrorMessage } from '@/lib/backendClient';
 
 interface DisplayExam {
   id: string;
@@ -65,12 +66,12 @@ export default function ManageExams() {
   const { user } = useAuth();
 
   useEffect(() => {
-    fetchExams();
+    void fetchExams();
   }, []);
 
-  function fetchExams() {
+  async function fetchExams() {
     try {
-      const allExams = getExams();
+      const allExams = await getExams();
       // Filter to show only exams created by this user
       const userExams = allExams.map(exam => ({
         id: exam.id,
@@ -84,22 +85,22 @@ export default function ManageExams() {
       setExams(userExams);
     } catch (error) {
       console.error('Error fetching exams:', error);
-      toast.error('Failed to load exams');
+      toast.error(getBackendErrorMessage(error, 'Failed to load exams'));
     } finally {
       setLoading(false);
     }
   }
 
-  function handleDeleteExam(examId: string) {
+  async function handleDeleteExam(examId: string) {
     try {
-      const success = deleteExam(examId);
+      const success = await deleteExam(examId);
       if (success) {
         toast.success('Exam deleted');
-        setExams(exams.filter(e => e.id !== examId));
+        setExams(prev => prev.filter(e => e.id !== examId));
       }
     } catch (error) {
       console.error('Error deleting exam:', error);
-      toast.error('Failed to delete exam');
+      toast.error(getBackendErrorMessage(error, 'Failed to delete exam'));
     } finally {
       setDeleteExamId(null);
     }
@@ -235,10 +236,9 @@ export default function ManageExams() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
+              onClick={async () => {
                 if (deleteExamId) {
-                  handleDeleteExam(deleteExamId);
-                  setDeleteExamId(null);
+                  await handleDeleteExam(deleteExamId);
                 }
               }}
             >

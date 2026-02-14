@@ -17,6 +17,7 @@ import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
 import { examTemplates } from '@/data/jeeTestData';
 import { createExam } from '@/lib/examStorage';
+import { getBackendErrorMessage } from '@/lib/backendClient';
 
 const optionSchema = z.object({
   text: z.string().min(1, 'Option text is required'),
@@ -139,7 +140,7 @@ export default function CreateExam() {
       }));
 
       // Create exam using localStorage
-      createExam({
+      await createExam({
         title: data.title,
         description: data.description || '',
         durationMinutes: data.durationMinutes,
@@ -153,7 +154,7 @@ export default function CreateExam() {
       navigate('/dashboard/exams');
     } catch (error) {
       console.error('Error creating exam:', error);
-      toast.error('Failed to create exam');
+      toast.error(getBackendErrorMessage(error, 'Failed to create exam'));
     } finally {
       setIsSubmitting(false);
     }

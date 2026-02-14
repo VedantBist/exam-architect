@@ -1,70 +1,135 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { fetchBackend, getBackendErrorMessage, isBackendApiMode } from '@/lib/backendClient';
+import type { AppUser, UserRole } from '@/lib/authTypes';
 
-type UserRole = 'admin' | 'student' | null;
-
-interface DummyUser {
-  id: string;
-  email: string;
-  fullName: string;
-  role: UserRole;
+interface AuthResponse {
+  user: AppUser;
 }
 
 interface AuthContextType {
-  user: DummyUser | null;
+  user: AppUser | null;
   role: UserRole;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, fullName: string, role: 'admin' | 'student') => Promise<{ error: Error | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    role: 'admin' | 'student'
+  ) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// In-memory storage for dummy users (resets on page refresh)
-const dummyUsers: Map<string, DummyUser & { password: string }> = new Map([
-  // Pre-loaded demo accounts
-  ['admin@example.com', {
-    id: 'admin-001',
-    email: 'admin@example.com',
-    fullName: 'Admin User',
-    role: 'admin',
-    password: 'admin123'
-  }],
-  ['student@example.com', {
-    id: 'student-001',
-    email: 'student@example.com',
-    fullName: 'Student User',
-    role: 'student',
-    password: 'student123'
-  }]
+const dummyUsers: Map<string, AppUser & { password: string }> = new Map([
+  [
+    'admin@example.com',
+    {
+      id: 'admin-001',
+      email: 'admin@example.com',
+      fullName: 'Admin User',
+      role: 'admin',
+      password: 'admin123',
+    },
+  ],
+  [
+    'student@example.com',
+    {
+      id: 'student-001',
+      email: 'student@example.com',
+      fullName: 'Student User',
+      role: 'student',
+      password: 'student123',
+    },
+  ],
 ]);
 
 function generateUserId(): string {
   return `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
+function loadStoredUser(): AppUser | null {
+  const stored = localStorage.getItem('dummyAuth');
+  if (!stored) return null;
+
+  try {
+    return JSON.parse(stored) as AppUser;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<DummyUser | null>(() => {
-    // Check localStorage for persisted user
-    const stored = localStorage.getItem('dummyAuth');
-    if (stored) {
+  const [user, setUser] = useState<AppUser | null>(loadStoredUser);
+  const [loading, setLoading] = useState<boolean>(() => isBackendApiMode());
+
+  useEffect(() => {
+    if (!isBackendApiMode()) {
+      setLoading(false);
+      return;
+    }
+
+    const storedUser = loadStoredUser();
+    if (!storedUser) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function bootstrapUser() {
       try {
-        return JSON.parse(stored);
-      } catch {
-        return null;
+        const response = await fetchBackend<AuthResponse>('/auth/me', {
+          method: 'GET',
+          headers: {
+            'X-User-Id': storedUser.id,
+          },
+        });
+
+        if (cancelled) return;
+
+        setUser(response.user);
+        localStorage.setItem('dummyAuth', JSON.stringify(response.user));
+      } catch (error) {
+        if (cancelled) return;
+
+        console.error('Auth bootstrap failed:', error);
+        setUser(null);
+        localStorage.removeItem('dummyAuth');
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
-    return null;
-  });
-  const [loading, setLoading] = useState(false);
+
+    void bootstrapUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function signIn(email: string, password: string) {
     setLoading(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
 
+    try {
+      if (isBackendApiMode()) {
+        const response = await fetchBackend<AuthResponse>('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email, password }),
+        });
+
+        setUser(response.user);
+        localStorage.setItem('dummyAuth', JSON.stringify(response.user));
+        return { error: null };
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
       const userData = dummyUsers.get(email);
-      
+
       if (!userData) {
         return { error: new Error('User not found. Try: admin@example.com or student@example.com') };
       }
@@ -73,16 +138,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: new Error('Invalid password') };
       }
 
-      const loggedInUser: DummyUser = {
+      const loggedInUser: AppUser = {
         id: userData.id,
         email: userData.email,
         fullName: userData.fullName,
-        role: userData.role
+        role: userData.role,
       };
 
       setUser(loggedInUser);
       localStorage.setItem('dummyAuth', JSON.stringify(loggedInUser));
       return { error: null };
+    } catch (error) {
+      return { error: new Error(getBackendErrorMessage(error, 'Failed to sign in')) };
     } finally {
       setLoading(false);
     }
@@ -90,8 +157,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signUp(email: string, password: string, fullName: string, role: 'admin' | 'student') {
     setLoading(true);
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
+      if (isBackendApiMode()) {
+        const response = await fetchBackend<AuthResponse>('/auth/signup', {
+          method: 'POST',
+          body: JSON.stringify({ email, password, fullName, role }),
+        });
+
+        setUser(response.user);
+        localStorage.setItem('dummyAuth', JSON.stringify(response.user));
+        return { error: null };
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       if (dummyUsers.has(email)) {
         return { error: new Error('This email is already registered. Please sign in instead.') };
@@ -102,36 +181,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const newUserId = generateUserId();
-      const newUser: DummyUser & { password: string } = {
+      const newUser: AppUser & { password: string } = {
         id: newUserId,
         email,
         fullName,
         role,
-        password
+        password,
       };
 
-      // Store the new user
       dummyUsers.set(email, newUser);
 
-      // Auto-login after signup
-      const loggedInUser: DummyUser = {
+      const loggedInUser: AppUser = {
         id: newUserId,
         email,
         fullName,
-        role
+        role,
       };
 
       setUser(loggedInUser);
       localStorage.setItem('dummyAuth', JSON.stringify(loggedInUser));
       return { error: null };
+    } catch (error) {
+      return { error: new Error(getBackendErrorMessage(error, 'Failed to create account')) };
     } finally {
       setLoading(false);
     }
   }
 
   async function signOut() {
-    setUser(null);
-    localStorage.removeItem('dummyAuth');
+    try {
+      if (isBackendApiMode()) {
+        await fetchBackend<void>('/auth/logout', { method: 'POST' });
+      }
+    } catch (error) {
+      console.error('Sign out request failed:', error);
+    } finally {
+      setUser(null);
+      localStorage.removeItem('dummyAuth');
+    }
   }
 
   return (
