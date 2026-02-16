@@ -41,6 +41,20 @@ mvn spring-boot:run
 - DB: `jdbc:postgresql://localhost:5432/exam_architect`
 - Username: `exam_user`
 - Password: `exam_password`
+- OpenAI assistant billing mode: `OPENAI_ENABLED=false` (safe default, fallback responses only)
+
+## OpenAI Toggle (Optional)
+
+The assistant works without external OpenAI calls by default.
+
+To explicitly opt in:
+
+```bash
+export OPENAI_ENABLED=true
+export OPENAI_API_KEY=your_key_here
+```
+
+To stay zero-cost, keep `OPENAI_ENABLED=false` and do not set `OPENAI_API_KEY`.
 
 ## Current phase status
 

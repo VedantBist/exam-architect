@@ -13,6 +13,7 @@ import CreateExam from "./pages/admin/CreateExam";
 import StudentExams from "./pages/student/StudentExams";
 import StudentResults from "./pages/student/StudentResults";
 import TakeExam from "./pages/student/TakeExam";
+import AssistantChat from "./pages/AssistantChat";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,11 @@ const App = () => (
             <Route path="/dashboard" element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/dashboard/assistant" element={
+              <ProtectedRoute>
+                <AssistantChat />
               </ProtectedRoute>
             } />
             

@@ -11,6 +11,8 @@ tags:
   - name: Exams
   - name: Attempts
   - name: Stats
+  - name: Insights
+  - name: Assistant
 paths:
   /api/v1/health:
     get:
@@ -355,6 +357,69 @@ paths:
                 $ref: '#/components/schemas/ExamStats'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+  /api/v1/insights/student/{studentId}:
+    get:
+      tags: [Insights]
+      summary: Student-level performance insights
+      operationId: getStudentInsights
+      parameters:
+        - $ref: '#/components/parameters/StudentId'
+        - $ref: '#/components/parameters/XUserId'
+      responses:
+        '200':
+          description: Student insights
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentInsights'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/v1/insights/admin/overview:
+    get:
+      tags: [Insights]
+      summary: Admin cohort-level insights
+      operationId: getAdminInsights
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+      responses:
+        '200':
+          description: Admin insights
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminInsights'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /api/v1/assistant/chat:
+    post:
+      tags: [Assistant]
+      summary: Context-aware assistant chat for student/admin insights
+      operationId: assistantChat
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantChatRequest'
+      responses:
+        '200':
+          description: Assistant response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantChatResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
 components:
   parameters:
     XUserId:
@@ -371,6 +436,12 @@ components:
         type: string
     AttemptId:
       name: attemptId
+      in: path
+      required: true
+      schema:
+        type: string
+    StudentId:
+      name: studentId
       in: path
       required: true
       schema:
@@ -735,3 +806,198 @@ components:
         submittedAttempts:
           type: integer
       required: [totalExams, activeExams, totalAttempts, submittedAttempts]
+    QuestionTypeInsight:
+      type: object
+      nullable: true
+      properties:
+        type:
+          type: string
+          enum: [mcq, true_false, integer]
+        correct:
+          type: integer
+        total:
+          type: integer
+        accuracy:
+          type: number
+      required: [type, correct, total, accuracy]
+    RecentAttemptInsight:
+      type: object
+      properties:
+        attemptId:
+          type: string
+        examId:
+          type: string
+        examTitle:
+          type: string
+        percentage:
+          type: number
+        passed:
+          type: boolean
+        submittedAt:
+          type: string
+          format: date-time
+      required: [attemptId, examId, examTitle, percentage, passed, submittedAt]
+    StudentInsights:
+      type: object
+      properties:
+        studentId:
+          type: string
+        studentName:
+          type: string
+          nullable: true
+        submittedAttempts:
+          type: integer
+        averagePercentage:
+          type: number
+        latestPercentage:
+          type: number
+        passRate:
+          type: number
+        predictedNextPercentage:
+          type: number
+        trend:
+          type: string
+          enum: [improving, declining, stable, insufficient_data]
+        strongestQuestionType:
+          $ref: '#/components/schemas/QuestionTypeInsight'
+        weakestQuestionType:
+          $ref: '#/components/schemas/QuestionTypeInsight'
+        recentAttempts:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecentAttemptInsight'
+        recommendations:
+          type: array
+          items:
+            type: string
+      required:
+        - studentId
+        - submittedAttempts
+        - averagePercentage
+        - latestPercentage
+        - passRate
+        - predictedNextPercentage
+        - trend
+        - recentAttempts
+        - recommendations
+    AtRiskStudentInsight:
+      type: object
+      properties:
+        studentId:
+          type: string
+        studentName:
+          type: string
+        attempts:
+          type: integer
+        averagePercentage:
+          type: number
+        trend:
+          type: string
+      required: [studentId, studentName, attempts, averagePercentage, trend]
+    ExamDifficultyInsight:
+      type: object
+      properties:
+        examId:
+          type: string
+        examTitle:
+          type: string
+        attempts:
+          type: integer
+        averagePercentage:
+          type: number
+        passRate:
+          type: number
+      required: [examId, examTitle, attempts, averagePercentage, passRate]
+    DailyTrendInsight:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        attempts:
+          type: integer
+        averagePercentage:
+          type: number
+        passRate:
+          type: number
+      required: [date, attempts, averagePercentage, passRate]
+    AdminInsights:
+      type: object
+      properties:
+        submittedAttempts:
+          type: integer
+        uniqueStudents:
+          type: integer
+        averagePercentage:
+          type: number
+        passRate:
+          type: number
+        atRiskStudents:
+          type: array
+          items:
+            $ref: '#/components/schemas/AtRiskStudentInsight'
+        hardestExams:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExamDifficultyInsight'
+        recentDailyTrend:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailyTrendInsight'
+        recommendations:
+          type: array
+          items:
+            type: string
+      required:
+        - submittedAttempts
+        - uniqueStudents
+        - averagePercentage
+        - passRate
+        - atRiskStudents
+        - hardestExams
+        - recentDailyTrend
+        - recommendations
+    AssistantConversationTurn:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+      required: [role, content]
+    AssistantChatRequest:
+      type: object
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        studentId:
+          type: string
+          nullable: true
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantConversationTurn'
+      required: [message]
+    AssistantChatResponse:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [live, fallback]
+        reply:
+          type: string
+        keyPoints:
+          type: array
+          items:
+            type: string
+        nextActions:
+          type: array
+          items:
+            type: string
+        generatedAt:
+          type: string
+          format: date-time
+      required: [mode, reply, keyPoints, nextActions, generatedAt]

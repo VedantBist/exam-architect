@@ -32,7 +32,7 @@ export async function seedExamTemplate(
         duration_minutes: template.durationMinutes,
         passing_percentage: template.passingPercentage,
         created_by: userId,
-        status: 'created',
+        status: 'active',
       })
       .select()
       .single();

@@ -42,10 +42,24 @@ Redirected to Dashboard
 |---------|--------|
 | Email Verification | ❌ NOT NEEDED |
 | Lovable Dependency | ❌ REMOVED |
+| OpenAI Paid Calls by Default | ❌ DISABLED |
 | Instant Login | ✅ YES |
 | Dummy Accounts | ✅ PRE-LOADED |
 | Data Persistence | ✅ localStorage |
 | Create Own Account | ✅ YES (Sign Up tab) |
+
+## Zero-Dollar AI Mode
+
+- Backend default is `OPENAI_ENABLED=false`.
+- Assistant works in fallback mode without paid OpenAI API usage.
+- Keep `OPENAI_API_KEY` unset to remain zero-cost.
+
+Enable paid API only if you explicitly want it:
+
+```bash
+OPENAI_ENABLED=true
+OPENAI_API_KEY=your_key_here
+```
 
 ## What Each Role Can Do
 

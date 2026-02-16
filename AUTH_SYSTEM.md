@@ -2,6 +2,19 @@
 
 This exam system now uses a **dummy/mock authentication system** that is completely independent of Lovable and doesn't require real email verification.
 
+## 💸 Zero-Dollar AI Safety
+
+- OpenAI paid API calls are disabled by default in backend config.
+- Default: `OPENAI_ENABLED=false`
+- If no `OPENAI_API_KEY` is set, assistant responses stay in fallback mode with no external API billing.
+
+Only turn this on intentionally:
+
+```bash
+OPENAI_ENABLED=true
+OPENAI_API_KEY=your_key_here
+```
+
 ## 🚀 Quick Start
 
 ### Demo Accounts (Pre-loaded)

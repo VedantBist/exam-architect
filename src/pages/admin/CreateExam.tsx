@@ -146,7 +146,7 @@ export default function CreateExam() {
         durationMinutes: data.durationMinutes,
         passingPercentage: data.passingPercentage,
         createdBy: user.id,
-        status: 'created',
+        status: 'active',
         questions: examQuestions,
       });
 

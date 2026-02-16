@@ -77,7 +77,7 @@ public class ExamService {
   @Transactional
   public ExamDto createExam(CreateExamRequest request) {
     String examId = normalizeId(request.id(), "exam");
-    String status = normalizeExamStatus(request.status() == null ? "created" : request.status());
+    String status = normalizeExamStatus(request.status() == null ? "active" : request.status());
 
     Exam exam = Exam.builder()
         .id(examId)

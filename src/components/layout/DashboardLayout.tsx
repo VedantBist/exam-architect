@@ -8,7 +8,8 @@ import {
   Settings, 
   LogOut,
   ClipboardList,
-  BarChart3
+  BarChart3,
+  Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
@@ -22,12 +23,14 @@ const adminLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/exams', label: 'Manage Exams', icon: FileText },
   { href: '/dashboard/results', label: 'Results', icon: BarChart3 },
+  { href: '/dashboard/assistant', label: 'AI Assistant', icon: Sparkles },
 ];
 
 const studentLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/my-exams', label: 'My Exams', icon: ClipboardList },
   { href: '/dashboard/my-results', label: 'My Results', icon: BarChart3 },
+  { href: '/dashboard/assistant', label: 'AI Assistant', icon: Sparkles },
 ];
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {

@@ -7,13 +7,20 @@ import {
   Clock, 
   ArrowRight,
   Plus,
-  TrendingUp
+  TrendingUp,
+  Sparkles
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
-import { getExamStats } from '@/lib/examStorage';
+import {
+  getAdminInsights,
+  getExamStats,
+  getStudentInsights,
+  type AdminInsights,
+  type StudentInsights,
+} from '@/lib/examStorage';
 
 interface DashboardStats {
   totalExams: number;
@@ -30,6 +37,8 @@ export default function Dashboard() {
     completedAttempts: 0,
     pendingResults: 0,
   });
+  const [adminInsights, setAdminInsights] = useState<AdminInsights | null>(null);
+  const [studentInsights, setStudentInsights] = useState<StudentInsights | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchStats = useCallback(async () => {
@@ -46,12 +55,22 @@ export default function Dashboard() {
         completedAttempts: examStats.submittedAttempts,
         pendingResults: 0,
       });
+
+      if (role === 'admin') {
+        const insights = await getAdminInsights();
+        setAdminInsights(insights);
+        setStudentInsights(null);
+      } else if (role === 'student') {
+        const insights = await getStudentInsights(user.id);
+        setStudentInsights(insights);
+        setAdminInsights(null);
+      }
     } catch (error) {
       console.error('Error fetching stats:', error);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [role, user]);
 
   useEffect(() => {
     void fetchStats();
@@ -108,10 +127,55 @@ export default function Dashboard() {
                 <TrendingUp className="h-4 w-4 text-success" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-success">--</div>
+                <div className="text-3xl font-bold text-success">
+                  {adminInsights ? `${adminInsights.passRate.toFixed(1)}%` : '--'}
+                </div>
               </CardContent>
             </Card>
           </div>
+
+          {adminInsights && (
+            <Card className="shadow-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-accent" />
+                  AI Insights Snapshot
+                </CardTitle>
+                <CardDescription>Real-time cohort patterns and suggested actions</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-lg border p-4">
+                    <p className="text-sm text-muted-foreground">Hardest Exam</p>
+                    <p className="mt-1 text-base font-semibold">
+                      {adminInsights.hardestExams[0]?.examTitle ?? 'Not enough data'}
+                    </p>
+                    {adminInsights.hardestExams[0] && (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Avg {adminInsights.hardestExams[0].averagePercentage.toFixed(1)}% across{' '}
+                        {adminInsights.hardestExams[0].attempts} attempts
+                      </p>
+                    )}
+                  </div>
+                  <div className="rounded-lg border p-4">
+                    <p className="text-sm text-muted-foreground">At-Risk Students</p>
+                    <p className="mt-1 text-base font-semibold">{adminInsights.atRiskStudents.length}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Students with low average performance or declining trend
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {adminInsights.recommendations.map((item) => (
+                    <p key={item} className="text-sm text-muted-foreground">
+                      • {item}
+                    </p>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <div className="grid gap-6 md:grid-cols-2">
             <Card className="shadow-card">
@@ -237,6 +301,52 @@ export default function Dashboard() {
             </Button>
           </CardContent>
         </Card>
+
+        {studentInsights && (
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-accent" />
+                AI Performance Insights
+              </CardTitle>
+              <CardDescription>Personalized trend and recommendation summary</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-lg border p-4">
+                  <p className="text-sm text-muted-foreground">Trend</p>
+                  <p className="mt-1 text-base font-semibold capitalize">
+                    {studentInsights.trend.replace('_', ' ')}
+                  </p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <p className="text-sm text-muted-foreground">Predicted Next Score</p>
+                  <p className="mt-1 text-base font-semibold">
+                    {studentInsights.predictedNextPercentage.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <p className="text-sm text-muted-foreground">Weakest Area</p>
+                  <p className="mt-1 text-base font-semibold">
+                    {studentInsights.weakestQuestionType?.type.replace('_', ' ') ?? 'Not enough data'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {studentInsights.recommendations.map((item) => (
+                  <p key={item} className="text-sm text-muted-foreground">
+                    • {item}
+                  </p>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {loading && !studentInsights && (
+          <p className="text-sm text-muted-foreground">Loading dashboard insights...</p>
+        )}
       </div>
     </DashboardLayout>
   );

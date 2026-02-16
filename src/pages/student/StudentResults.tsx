@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle, FileText, Trophy, TrendingUp, XCircle } from 'lucide-react';
+import { CheckCircle, FileText, Sparkles, Trophy, TrendingUp, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/lib/auth';
-import { getAttemptsByStudent, getExamById } from '@/lib/examStorage';
+import { getAttemptsByStudent, getExamById, getStudentInsights, type StudentInsights } from '@/lib/examStorage';
 import { toast } from 'sonner';
 import { getBackendErrorMessage } from '@/lib/backendClient';
 
@@ -25,6 +25,7 @@ interface DisplayResult {
 
 export default function StudentResults() {
   const [results, setResults] = useState<DisplayResult[]>([]);
+  const [insights, setInsights] = useState<StudentInsights | null>(null);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
@@ -36,7 +37,12 @@ export default function StudentResults() {
       }
 
       try {
-        const submittedAttempts = (await getAttemptsByStudent(user.id))
+        const [attempts, aiInsights] = await Promise.all([
+          getAttemptsByStudent(user.id),
+          getStudentInsights(user.id),
+        ]);
+
+        const submittedAttempts = attempts
           .filter((attempt) => attempt.status === 'submitted' && attempt.submittedAt);
 
         const displayResults = await Promise.all(
@@ -56,10 +62,13 @@ export default function StudentResults() {
               submittedAt: attempt.submittedAt!,
             };
           })
-        )
-        .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+        );
+        displayResults.sort(
+          (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+        );
 
         setResults(displayResults);
+        setInsights(aiInsights);
       } catch (error) {
         console.error('Error fetching results:', error);
         toast.error(getBackendErrorMessage(error, 'Failed to load results'));
@@ -116,6 +125,53 @@ export default function StudentResults() {
             </CardContent>
           </Card>
         </div>
+
+        {insights && (
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Sparkles className="h-4 w-4 text-accent" />
+                AI Insights
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-4">
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Trend</p>
+                  <p className="mt-1 text-sm font-semibold capitalize">
+                    {insights.trend.replace('_', ' ')}
+                  </p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Predicted Next</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {insights.predictedNextPercentage.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Strongest</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {insights.strongestQuestionType?.type.replace('_', ' ') ?? 'Not enough data'}
+                  </p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Weakest</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {insights.weakestQuestionType?.type.replace('_', ' ') ?? 'Not enough data'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {insights.recommendations.map((item) => (
+                  <p key={item} className="text-sm text-muted-foreground">
+                    • {item}
+                  </p>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {loading ? (
           <div className="space-y-4">
