@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.examarchitect.backend.attempt.dto.AttemptAnalysisDto;
 import com.examarchitect.backend.attempt.dto.StudentAttemptDto;
 import com.examarchitect.backend.attempt.dto.UpdateAttemptRequest;
 import com.examarchitect.backend.attempt.model.ExamAttempt;
@@ -59,6 +60,7 @@ class AttemptServiceScoringTest {
         .studentId("student-001")
         .studentName("Student User")
         .answersJson("{\"q1\":\"m/s\",\"q2\":true,\"q3\":\"20\"}")
+        .analyticsJson("{\"questionTimingMs\":{}}")
         .score(0)
         .totalMarks(0)
         .percentage(BigDecimal.ZERO)
@@ -93,6 +95,7 @@ class AttemptServiceScoringTest {
         .studentId("student-001")
         .studentName("Student User")
         .answersJson("{\"q1\":\"abc\"}")
+        .analyticsJson("{\"questionTimingMs\":{}}")
         .score(0)
         .totalMarks(0)
         .percentage(BigDecimal.ZERO)
@@ -123,6 +126,7 @@ class AttemptServiceScoringTest {
         .studentId("student-001")
         .studentName("Student User")
         .answersJson("{}")
+        .analyticsJson("{\"questionTimingMs\":{}}")
         .score(3)
         .totalMarks(3)
         .percentage(new BigDecimal("100"))
@@ -134,7 +138,7 @@ class AttemptServiceScoringTest {
     when(examAttemptRepository.findById("attempt-3")).thenReturn(Optional.of(attempt));
 
     ApiException ex = assertThrows(ApiException.class, () ->
-        attemptService.updateAttempt("attempt-3", new UpdateAttemptRequest(Map.of("q1", "m/s")), "student-001"));
+        attemptService.updateAttempt("attempt-3", new UpdateAttemptRequest(Map.of("q1", "m/s"), null), "student-001"));
 
     assertEquals("ATTEMPT_ALREADY_SUBMITTED", ex.getCode());
   }
@@ -147,6 +151,7 @@ class AttemptServiceScoringTest {
         .studentId("student-001")
         .studentName("Student User")
         .answersJson("{}")
+        .analyticsJson("{\"questionTimingMs\":{}}")
         .score(0)
         .totalMarks(3)
         .percentage(BigDecimal.ZERO)
@@ -157,8 +162,74 @@ class AttemptServiceScoringTest {
     when(examAttemptRepository.findById("attempt-4")).thenReturn(Optional.of(attempt));
 
     ApiException ex = assertThrows(ApiException.class, () ->
-        attemptService.updateAttempt("attempt-4", new UpdateAttemptRequest(Map.of("q1", "m/s")), "student-999"));
+        attemptService.updateAttempt("attempt-4", new UpdateAttemptRequest(Map.of("q1", "m/s"), null), "student-999"));
 
     assertEquals("AUTH_FORBIDDEN", ex.getCode());
+  }
+
+  @Test
+  void getAttemptAnalysisShouldAggregatePerSubjectMetricsAndTiming() {
+    ExamAttempt attempt = ExamAttempt.builder()
+        .id("attempt-5")
+        .examId("exam-5")
+        .studentId("student-001")
+        .studentName("Student User")
+        .answersJson("{\"q1\":\"m/s\",\"q2\":\"wrong\"}")
+        .analyticsJson("{\"questionTimingMs\":{\"q1\":60000,\"q2\":30000,\"q3\":15000}}")
+        .score(4)
+        .totalMarks(8)
+        .percentage(new BigDecimal("50.00"))
+        .status("submitted")
+        .startedAt(OffsetDateTime.parse("2026-02-14T10:00:00Z"))
+        .submittedAt(OffsetDateTime.parse("2026-02-14T10:30:00Z"))
+        .build();
+
+    Exam exam = Exam.builder().id("exam-5").title("JEE Mock").status("active").build();
+    Question q1 = Question.builder()
+        .id("q1")
+        .type("mcq")
+        .subject("Physics")
+        .marks(4)
+        .correctAnswerText("m/s")
+        .build();
+    Question q2 = Question.builder()
+        .id("q2")
+        .type("mcq")
+        .subject("Physics")
+        .marks(4)
+        .correctAnswerText("correct")
+        .build();
+    Question q3 = Question.builder()
+        .id("q3")
+        .type("mcq")
+        .subject("Chemistry")
+        .marks(2)
+        .correctAnswerText("x")
+        .build();
+
+    when(examAttemptRepository.findById("attempt-5")).thenReturn(Optional.of(attempt));
+    when(examRepository.findById("exam-5")).thenReturn(Optional.of(exam));
+    when(questionRepository.findByExamIdOrderByOrderIndexAsc("exam-5")).thenReturn(List.of(q1, q2, q3));
+
+    AttemptAnalysisDto analysis = attemptService.getAttemptAnalysis("attempt-5", "student-001");
+
+    assertEquals("attempt-5", analysis.attemptId());
+    assertEquals(2, analysis.subjects().size());
+
+    var physics = analysis.subjects().stream().filter(s -> s.subject().equals("Physics")).findFirst().orElseThrow();
+    assertEquals(2, physics.totalQuestions());
+    assertEquals(2, physics.attemptedQuestions());
+    assertEquals(1, physics.correctQuestions());
+    assertEquals(1, physics.wrongQuestions());
+    assertEquals(0, physics.unattemptedQuestions());
+    assertEquals(4, physics.marksObtained());
+    assertEquals(8, physics.totalMarks());
+    assertEquals("90.00", physics.totalTimeSpentSeconds().toPlainString());
+
+    var chemistry = analysis.subjects().stream().filter(s -> s.subject().equals("Chemistry")).findFirst().orElseThrow();
+    assertEquals(1, chemistry.totalQuestions());
+    assertEquals(0, chemistry.attemptedQuestions());
+    assertEquals(1, chemistry.unattemptedQuestions());
+    assertEquals("15.00", chemistry.totalTimeSpentSeconds().toPlainString());
   }
 }

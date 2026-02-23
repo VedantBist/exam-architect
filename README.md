@@ -52,6 +52,19 @@ npm run dev
 
 Open `http://localhost:5173`.
 
+## Detailed Results Toggle (Rollback Safe)
+
+The new per-paper detailed analysis page is controlled by a frontend feature flag.
+
+- Enabled by default: `VITE_RESULTS_ANALYSIS_ENABLED=true`
+- Instant rollback to legacy results list:
+
+```bash
+echo "VITE_RESULTS_ANALYSIS_ENABLED=false" >> .env.local
+```
+
+Then restart frontend (`npm run dev`).
+
 ## Start (Spring Boot API Mode)
 
 1. Start PostgreSQL:

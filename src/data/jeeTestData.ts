@@ -14,6 +14,7 @@ export interface ExamTemplate {
 export interface QuestionTemplate {
   text: string;
   type: 'mcq' | 'true_false' | 'integer';
+  subject?: string;
   marks: number;
   correctAnswer: string;
   options?: string[];
@@ -278,6 +279,7 @@ export const jeeMainMockTest: ExamTemplate = {
     {
       text: 'A ball is dropped from a height of 20 m. How long will it take to reach the ground? (Assume g = 10 m/s²)',
       type: 'integer',
+      subject: 'Physics',
       marks: 4,
       correctAnswer: '2',
       options: undefined,
@@ -285,6 +287,7 @@ export const jeeMainMockTest: ExamTemplate = {
     {
       text: 'The SI unit of work is:',
       type: 'mcq',
+      subject: 'Physics',
       marks: 4,
       correctAnswer: 'option_1',
       options: [
@@ -297,6 +300,7 @@ export const jeeMainMockTest: ExamTemplate = {
     {
       text: 'Light travels in straight lines in a homogeneous medium.',
       type: 'true_false',
+      subject: 'Physics',
       marks: 2,
       correctAnswer: 'true',
       options: undefined,
@@ -305,6 +309,7 @@ export const jeeMainMockTest: ExamTemplate = {
     {
       text: 'What is the molar mass of H₂SO₄?',
       type: 'integer',
+      subject: 'Chemistry',
       marks: 4,
       correctAnswer: '98',
       options: undefined,
@@ -312,6 +317,7 @@ export const jeeMainMockTest: ExamTemplate = {
     {
       text: 'Water has a boiling point of 100°C at standard atmospheric pressure.',
       type: 'true_false',
+      subject: 'Chemistry',
       marks: 2,
       correctAnswer: 'true',
       options: undefined,
@@ -319,6 +325,7 @@ export const jeeMainMockTest: ExamTemplate = {
     {
       text: 'Which is the most abundant element in the human body?',
       type: 'mcq',
+      subject: 'Chemistry',
       marks: 4,
       correctAnswer: 'option_2',
       options: [
@@ -332,6 +339,7 @@ export const jeeMainMockTest: ExamTemplate = {
     {
       text: 'What is the value of π (approximately)?',
       type: 'mcq',
+      subject: 'Mathematics',
       marks: 4,
       correctAnswer: 'option_2',
       options: [
@@ -344,6 +352,7 @@ export const jeeMainMockTest: ExamTemplate = {
     {
       text: 'The square root of 144 is:',
       type: 'integer',
+      subject: 'Mathematics',
       marks: 4,
       correctAnswer: '12',
       options: undefined,
@@ -351,6 +360,7 @@ export const jeeMainMockTest: ExamTemplate = {
     {
       text: 'sin²(θ) + cos²(θ) = 1 for all values of θ.',
       type: 'true_false',
+      subject: 'Mathematics',
       marks: 2,
       correctAnswer: 'true',
       options: undefined,

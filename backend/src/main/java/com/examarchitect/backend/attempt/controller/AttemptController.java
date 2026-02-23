@@ -1,5 +1,6 @@
 package com.examarchitect.backend.attempt.controller;
 
+import com.examarchitect.backend.attempt.dto.AttemptAnalysisDto;
 import com.examarchitect.backend.attempt.dto.CreateAttemptRequest;
 import com.examarchitect.backend.attempt.dto.StudentAttemptDto;
 import com.examarchitect.backend.attempt.dto.UpdateAttemptRequest;
@@ -80,5 +81,14 @@ public class AttemptController {
   ) {
     UserAccount actor = accessControlService.requireStudent(userId);
     return ResponseEntity.ok(attemptService.submitAttempt(attemptId, actor.getId()));
+  }
+
+  @GetMapping("/{attemptId}/analysis")
+  public ResponseEntity<AttemptAnalysisDto> getAttemptAnalysis(
+      @PathVariable String attemptId,
+      @RequestHeader(name = "X-User-Id", required = false) String userId
+  ) {
+    UserAccount actor = accessControlService.requireStudent(userId);
+    return ResponseEntity.ok(attemptService.getAttemptAnalysis(attemptId, actor.getId()));
   }
 }

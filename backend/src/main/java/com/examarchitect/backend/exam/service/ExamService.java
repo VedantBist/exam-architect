@@ -33,6 +33,7 @@ public class ExamService {
 
   private static final Set<String> ALLOWED_EXAM_STATUSES = Set.of("created", "active", "archived");
   private static final Set<String> ALLOWED_QUESTION_TYPES = Set.of("mcq", "true_false", "integer");
+  private static final String DEFAULT_QUESTION_SUBJECT = "General";
   private static final SecureRandom RANDOM = new SecureRandom();
 
   private final ExamRepository examRepository;
@@ -96,12 +97,14 @@ public class ExamService {
         CreateExamQuestionRequest questionRequest = request.questions().get(i);
         String questionId = normalizeId(questionRequest.id(), "q");
         String questionType = normalizeQuestionType(questionRequest.type());
+        String questionSubject = normalizeQuestionSubject(questionRequest.subject());
 
         Question question = Question.builder()
             .id(questionId)
             .examId(examId)
             .text(questionRequest.text().trim())
             .type(questionType)
+            .subject(questionSubject)
             .marks(questionRequest.marks())
             .orderIndex(questionRequest.orderIndex() == null ? i : questionRequest.orderIndex())
             .build();
@@ -191,6 +194,9 @@ public class ExamService {
               question.getId(),
               question.getText(),
               question.getType(),
+              question.getSubject() == null || question.getSubject().isBlank()
+                  ? DEFAULT_QUESTION_SUBJECT
+                  : question.getSubject(),
               question.getMarks(),
               question.getOrderIndex(),
               optionDtos,
@@ -256,6 +262,17 @@ public class ExamService {
     String normalized = type.trim().toLowerCase(Locale.ROOT);
     if (!ALLOWED_QUESTION_TYPES.contains(normalized)) {
       throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Invalid question type");
+    }
+    return normalized;
+  }
+
+  private String normalizeQuestionSubject(String subject) {
+    if (subject == null || subject.isBlank()) {
+      return DEFAULT_QUESTION_SUBJECT;
+    }
+    String normalized = subject.trim();
+    if (normalized.length() > 64) {
+      throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Question subject must be 64 characters or less");
     }
     return normalized;
   }

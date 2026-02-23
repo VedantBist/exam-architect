@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.examarchitect.backend.attempt.dto.AttemptAnalysisDto;
+import com.examarchitect.backend.attempt.dto.AttemptSubjectAnalysisDto;
 import com.examarchitect.backend.attempt.dto.StudentAttemptDto;
 import com.examarchitect.backend.attempt.service.AttemptService;
 import com.examarchitect.backend.auth.model.UserAccount;
@@ -17,6 +19,7 @@ import com.examarchitect.backend.common.api.ApiException;
 import com.examarchitect.backend.common.security.AccessControlService;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -75,6 +78,7 @@ class AttemptControllerWebMvcTest {
             "student-001",
             "Student User",
             java.util.Map.of("q1", "m/s"),
+            java.util.Map.of("questionTimingMs", java.util.Map.of("q1", 1200)),
             0,
             3,
             BigDecimal.ZERO,
@@ -93,5 +97,45 @@ class AttemptControllerWebMvcTest {
         .andExpect(jsonPath("$.id").value("attempt-1"))
         .andExpect(jsonPath("$.status").value("in-progress"))
         .andExpect(jsonPath("$.answers.q1").value("m/s"));
+  }
+
+  @Test
+  void getAttemptAnalysisShouldReturnSubjectBreakdown() throws Exception {
+    UserAccount actor = UserAccount.builder().id("student-001").role("student").build();
+    when(accessControlService.requireStudent("student-001")).thenReturn(actor);
+    when(attemptService.getAttemptAnalysis("attempt-1", "student-001"))
+        .thenReturn(new AttemptAnalysisDto(
+            "attempt-1",
+            "exam-001",
+            "Physics Test",
+            8,
+            10,
+            new BigDecimal("80.00"),
+            "submitted",
+            OffsetDateTime.parse("2026-02-14T10:00:00Z"),
+            OffsetDateTime.parse("2026-02-14T10:30:00Z"),
+            List.of(new AttemptSubjectAnalysisDto(
+                "Physics",
+                5,
+                4,
+                4,
+                0,
+                1,
+                8,
+                10,
+                new BigDecimal("80.00"),
+                new BigDecimal("25.50"),
+                new BigDecimal("31.88"),
+                new BigDecimal("127.50")
+            ))
+        ));
+
+    mockMvc.perform(get("/api/v1/attempts/attempt-1/analysis")
+            .header("X-User-Id", "student-001"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.attemptId").value("attempt-1"))
+        .andExpect(jsonPath("$.subjects[0].subject").value("Physics"))
+        .andExpect(jsonPath("$.subjects[0].attemptedQuestions").value(4))
+        .andExpect(jsonPath("$.subjects[0].avgTimePerQuestionSeconds").value(25.50));
   }
 }

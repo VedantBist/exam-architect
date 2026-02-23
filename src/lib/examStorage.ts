@@ -17,6 +17,7 @@ export interface ExamQuestion {
   id: string;
   text: string;
   type: 'mcq' | 'true_false' | 'integer';
+  subject?: string;
   marks: number;
   options?: ExamOption[];
   correctAnswer?: string | number | boolean;
@@ -42,12 +43,46 @@ export interface StudentAttempt {
   studentId: string;
   studentName: string;
   answers: Record<string, string | number | boolean>;
+  analytics?: AttemptAnalytics;
   score: number;
   totalMarks: number;
   percentage: number;
   status: 'in-progress' | 'submitted';
   startedAt: string;
   submittedAt?: string;
+}
+
+export interface AttemptAnalytics {
+  questionTimingMs?: Record<string, number>;
+  [key: string]: unknown;
+}
+
+export interface AttemptSubjectAnalysis {
+  subject: string;
+  totalQuestions: number;
+  attemptedQuestions: number;
+  correctQuestions: number;
+  wrongQuestions: number;
+  unattemptedQuestions: number;
+  marksObtained: number;
+  totalMarks: number;
+  marksPercentage: number;
+  avgTimePerQuestionSeconds: number;
+  avgTimePerAttemptedQuestionSeconds: number;
+  totalTimeSpentSeconds: number;
+}
+
+export interface AttemptAnalysis {
+  attemptId: string;
+  examId: string;
+  examTitle: string;
+  score: number;
+  totalMarks: number;
+  percentage: number;
+  status: 'in-progress' | 'submitted';
+  startedAt: string;
+  submittedAt?: string;
+  subjects: AttemptSubjectAnalysis[];
 }
 
 interface ExamStats {
@@ -153,6 +188,32 @@ const EXAMS_KEY = 'exams_storage';
 const ATTEMPTS_KEY = 'attempts_storage';
 const DEFAULT_PASSING_PERCENTAGE = 40;
 
+function normalizeQuestionTimingMs(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  const result: Record<string, number> = {};
+  for (const [questionId, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      result[questionId] = Math.max(0, Math.round(raw));
+    } else if (typeof raw === 'string' && raw.trim() !== '') {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) {
+        result[questionId] = Math.max(0, Math.round(parsed));
+      }
+    }
+  }
+  return result;
+}
+
+function normalizeAttemptAnalytics(analytics?: AttemptAnalytics): AttemptAnalytics {
+  const normalized: AttemptAnalytics =
+    analytics && typeof analytics === 'object' ? { ...analytics } : {};
+  normalized.questionTimingMs = normalizeQuestionTimingMs(normalized.questionTimingMs);
+  return normalized;
+}
+
 // Local-mode implementations
 function initializeSampleExams(): Exam[] {
   return [
@@ -171,6 +232,7 @@ function initializeSampleExams(): Exam[] {
           id: 'q1',
           text: 'What is the SI unit of velocity?',
           type: 'mcq',
+          subject: 'Physics',
           marks: 1,
           orderIndex: 0,
           options: [
@@ -185,6 +247,7 @@ function initializeSampleExams(): Exam[] {
           id: 'q2',
           text: 'Velocity is a scalar quantity.',
           type: 'true_false',
+          subject: 'Physics',
           marks: 1,
           orderIndex: 1,
           correctAnswer: false,
@@ -193,6 +256,7 @@ function initializeSampleExams(): Exam[] {
           id: 'q3',
           text: 'If an object moves 100m in 5 seconds, what is its speed in m/s?',
           type: 'integer',
+          subject: 'Physics',
           marks: 1,
           orderIndex: 2,
           correctAnswer: 20,
@@ -214,6 +278,7 @@ function initializeSampleExams(): Exam[] {
           id: 'q4',
           text: 'What is the chemical symbol for Gold?',
           type: 'mcq',
+          subject: 'Chemistry',
           marks: 1,
           orderIndex: 0,
           options: [
@@ -228,6 +293,7 @@ function initializeSampleExams(): Exam[] {
           id: 'q5',
           text: 'Water boils at 100°C at sea level.',
           type: 'true_false',
+          subject: 'Chemistry',
           marks: 1,
           orderIndex: 1,
           correctAnswer: true,
@@ -238,10 +304,20 @@ function initializeSampleExams(): Exam[] {
 }
 
 function getExamsLocal(): Exam[] {
+  const normalize = (exams: Exam[]): Exam[] =>
+    exams.map((exam) => ({
+      ...exam,
+      questions: exam.questions.map((question, idx) => ({
+        ...question,
+        subject: question.subject || 'General',
+        orderIndex: question.orderIndex ?? idx,
+      })),
+    }));
+
   try {
     const stored = localStorage.getItem(EXAMS_KEY);
     if (stored) {
-      return JSON.parse(stored) as Exam[];
+      return normalize(JSON.parse(stored) as Exam[]);
     }
   } catch (error) {
     console.error('Error loading exams from localStorage:', error);
@@ -249,7 +325,7 @@ function getExamsLocal(): Exam[] {
 
   const samples = initializeSampleExams();
   localStorage.setItem(EXAMS_KEY, JSON.stringify(samples));
-  return samples;
+  return normalize(samples);
 }
 
 function saveExamsLocal(exams: Exam[]) {
@@ -257,10 +333,16 @@ function saveExamsLocal(exams: Exam[]) {
 }
 
 function getAttemptsLocal(): StudentAttempt[] {
+  const normalize = (attempts: StudentAttempt[]): StudentAttempt[] =>
+    attempts.map((attempt) => ({
+      ...attempt,
+      analytics: normalizeAttemptAnalytics(attempt.analytics),
+    }));
+
   try {
     const stored = localStorage.getItem(ATTEMPTS_KEY);
     if (stored) {
-      return JSON.parse(stored) as StudentAttempt[];
+      return normalize(JSON.parse(stored) as StudentAttempt[]);
     }
   } catch (error) {
     console.error('Error loading attempts from localStorage:', error);
@@ -284,9 +366,17 @@ function toExamFromApi(exam: Exam): Exam {
     ...exam,
     questions: (exam.questions || []).map((question, idx) => ({
       ...question,
+      subject: question.subject || 'General',
       orderIndex: question.orderIndex ?? idx,
       options: question.options || [],
     })),
+  };
+}
+
+function normalizeAttempt(attempt: StudentAttempt): StudentAttempt {
+  return {
+    ...attempt,
+    analytics: normalizeAttemptAnalytics(attempt.analytics),
   };
 }
 
@@ -401,7 +491,8 @@ export async function getAttempts(studentId?: string): Promise<StudentAttempt[]>
     if (!studentId) {
       return [];
     }
-    return fetchBackend<StudentAttempt[]>(`/attempts?studentId=${encodeURIComponent(studentId)}`);
+    const response = await fetchBackend<StudentAttempt[]>(`/attempts?studentId=${encodeURIComponent(studentId)}`);
+    return response.map(normalizeAttempt);
   }
 
   return getAttemptsLocal();
@@ -409,7 +500,8 @@ export async function getAttempts(studentId?: string): Promise<StudentAttempt[]>
 
 export async function getAttemptsByStudent(studentId: string): Promise<StudentAttempt[]> {
   if (isBackendApiMode()) {
-    return fetchBackend<StudentAttempt[]>(`/attempts?studentId=${encodeURIComponent(studentId)}`);
+    const response = await fetchBackend<StudentAttempt[]>(`/attempts?studentId=${encodeURIComponent(studentId)}`);
+    return response.map(normalizeAttempt);
   }
 
   return getAttemptsLocal().filter((attempt) => attempt.studentId === studentId);
@@ -430,10 +522,11 @@ export async function createAttempt(
   exam: Exam
 ): Promise<StudentAttempt> {
   if (isBackendApiMode()) {
-    return fetchBackend<StudentAttempt>('/attempts', {
+    const response = await fetchBackend<StudentAttempt>('/attempts', {
       method: 'POST',
       body: JSON.stringify({ examId, studentId, studentName }),
     });
+    return normalizeAttempt(response);
   }
 
   const attempts = getAttemptsLocal();
@@ -443,6 +536,9 @@ export async function createAttempt(
     studentId,
     studentName,
     answers: {},
+    analytics: {
+      questionTimingMs: {},
+    },
     score: 0,
     totalMarks: exam.questions.reduce((sum, question) => sum + question.marks, 0),
     percentage: 0,
@@ -451,7 +547,7 @@ export async function createAttempt(
   };
   attempts.push(newAttempt);
   saveAttemptsLocal(attempts);
-  return newAttempt;
+  return normalizeAttempt(newAttempt);
 }
 
 export async function updateAttempt(attemptId: string, updates: Partial<StudentAttempt>): Promise<StudentAttempt | null> {
@@ -459,9 +555,12 @@ export async function updateAttempt(attemptId: string, updates: Partial<StudentA
     try {
       const response = await fetchBackend<StudentAttempt>(`/attempts/${attemptId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ answers: updates.answers ?? {} }),
+        body: JSON.stringify({
+          answers: updates.answers,
+          analytics: updates.analytics,
+        }),
       });
-      return response;
+      return normalizeAttempt(response);
     } catch (error) {
       if (isNotFoundError(error)) {
         return null;
@@ -477,17 +576,19 @@ export async function updateAttempt(attemptId: string, updates: Partial<StudentA
   attempts[index] = {
     ...attempts[index],
     ...updates,
+    analytics: normalizeAttemptAnalytics(updates.analytics ?? attempts[index].analytics),
   };
   saveAttemptsLocal(attempts);
-  return attempts[index];
+  return normalizeAttempt(attempts[index]);
 }
 
 export async function submitAttempt(attemptId: string, exam: Exam): Promise<StudentAttempt | null> {
   if (isBackendApiMode()) {
     try {
-      return await fetchBackend<StudentAttempt>(`/attempts/${attemptId}/submit`, {
+      const response = await fetchBackend<StudentAttempt>(`/attempts/${attemptId}/submit`, {
         method: 'POST',
       });
+      return normalizeAttempt(response);
     } catch (error) {
       if (isNotFoundError(error)) {
         return null;
@@ -515,6 +616,123 @@ export async function submitAttempt(attemptId: string, exam: Exam): Promise<Stud
     status: 'submitted',
     submittedAt: new Date().toISOString(),
   });
+}
+
+function hasAttemptedAnswer(answer: unknown): boolean {
+  if (answer === null || answer === undefined) {
+    return false;
+  }
+  if (typeof answer === 'string') {
+    return answer.trim() !== '';
+  }
+  return true;
+}
+
+function buildAttemptAnalysisPayload(attempt: StudentAttempt, exam: Exam): AttemptAnalysis {
+  const bySubject = new Map<string, AttemptSubjectAnalysis>();
+  const questionTimingMs = normalizeQuestionTimingMs(attempt.analytics?.questionTimingMs);
+
+  for (const question of exam.questions) {
+    const subject = (question.subject || 'General').trim() || 'General';
+    if (!bySubject.has(subject)) {
+      bySubject.set(subject, {
+        subject,
+        totalQuestions: 0,
+        attemptedQuestions: 0,
+        correctQuestions: 0,
+        wrongQuestions: 0,
+        unattemptedQuestions: 0,
+        marksObtained: 0,
+        totalMarks: 0,
+        marksPercentage: 0,
+        avgTimePerQuestionSeconds: 0,
+        avgTimePerAttemptedQuestionSeconds: 0,
+        totalTimeSpentSeconds: 0,
+      });
+    }
+
+    const section = bySubject.get(subject)!;
+    section.totalQuestions += 1;
+    section.totalMarks += question.marks;
+    section.totalTimeSpentSeconds = round2(
+      section.totalTimeSpentSeconds + (questionTimingMs[question.id] || 0) / 1000
+    );
+
+    const answer = attempt.answers[question.id];
+    if (!hasAttemptedAnswer(answer)) {
+      continue;
+    }
+
+    section.attemptedQuestions += 1;
+    if (checkAnswer(question, answer)) {
+      section.correctQuestions += 1;
+      section.marksObtained += question.marks;
+    } else {
+      section.wrongQuestions += 1;
+    }
+  }
+
+  const subjects = Array.from(bySubject.values()).map((subject) => {
+    const unattempted = Math.max(0, subject.totalQuestions - subject.attemptedQuestions);
+    const marksPercentage =
+      subject.totalMarks > 0 ? round2((subject.marksObtained * 100) / subject.totalMarks) : 0;
+    const avgPerQuestion =
+      subject.totalQuestions > 0 ? round2(subject.totalTimeSpentSeconds / subject.totalQuestions) : 0;
+    const avgPerAttempted =
+      subject.attemptedQuestions > 0
+        ? round2(subject.totalTimeSpentSeconds / subject.attemptedQuestions)
+        : 0;
+
+    return {
+      ...subject,
+      unattemptedQuestions: unattempted,
+      marksPercentage,
+      avgTimePerQuestionSeconds: avgPerQuestion,
+      avgTimePerAttemptedQuestionSeconds: avgPerAttempted,
+      totalTimeSpentSeconds: round2(subject.totalTimeSpentSeconds),
+    };
+  });
+
+  return {
+    attemptId: attempt.id,
+    examId: attempt.examId,
+    examTitle: exam.title,
+    score: attempt.score,
+    totalMarks: attempt.totalMarks,
+    percentage: round2(attempt.percentage),
+    status: attempt.status,
+    startedAt: attempt.startedAt,
+    submittedAt: attempt.submittedAt,
+    subjects,
+  };
+}
+
+export async function getAttemptAnalysis(
+  attemptId: string,
+  studentId: string
+): Promise<AttemptAnalysis | null> {
+  if (isBackendApiMode()) {
+    try {
+      return await fetchBackend<AttemptAnalysis>(`/attempts/${attemptId}/analysis`);
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  const attempt = getAttemptsLocal().find((item) => item.id === attemptId && item.studentId === studentId);
+  if (!attempt) {
+    return null;
+  }
+
+  const exam = getExamsLocal().find((item) => item.id === attempt.examId);
+  if (!exam) {
+    return null;
+  }
+
+  return buildAttemptAnalysisPayload(attempt, exam);
 }
 
 export function checkAnswer(question: ExamQuestion, answer: unknown): boolean {

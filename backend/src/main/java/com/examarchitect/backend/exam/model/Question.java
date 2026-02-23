@@ -36,6 +36,9 @@ public class Question {
   @Column(name = "type", nullable = false, length = 20)
   private String type;
 
+  @Column(name = "subject", nullable = false, length = 64)
+  private String subject;
+
   @Column(name = "marks", nullable = false)
   private Integer marks;
 

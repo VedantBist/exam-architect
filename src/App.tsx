@@ -12,6 +12,7 @@ import ManageExams from "./pages/admin/ManageExams";
 import CreateExam from "./pages/admin/CreateExam";
 import StudentExams from "./pages/student/StudentExams";
 import StudentResults from "./pages/student/StudentResults";
+import StudentResultDetail from "./pages/student/StudentResultDetail";
 import TakeExam from "./pages/student/TakeExam";
 import AssistantChat from "./pages/AssistantChat";
 import NotFound from "./pages/NotFound";
@@ -67,6 +68,11 @@ const App = () => (
             <Route path="/dashboard/my-results" element={
               <ProtectedRoute allowedRoles={['student']}>
                 <StudentResults />
+              </ProtectedRoute>
+            } />
+            <Route path="/dashboard/my-results/:attemptId" element={
+              <ProtectedRoute allowedRoles={['student']}>
+                <StudentResultDetail />
               </ProtectedRoute>
             } />
             <Route path="/exam/:examId" element={

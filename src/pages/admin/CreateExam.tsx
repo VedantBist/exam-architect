@@ -27,6 +27,7 @@ const optionSchema = z.object({
 const questionSchema = z.object({
   text: z.string().min(1, 'Question text is required'),
   type: z.enum(['mcq', 'true_false', 'integer']),
+  subject: z.string().min(1, 'Subject is required').max(64, 'Subject is too long'),
   marks: z.number().min(1),
   correctAnswer: z.string().optional(),
   options: z.array(optionSchema).optional(),
@@ -45,6 +46,7 @@ type ExamFormData = z.infer<typeof examSchema>;
 const defaultQuestion = {
   text: '',
   type: 'mcq' as const,
+  subject: 'General',
   marks: 1,
   correctAnswer: '',
   options: [
@@ -87,6 +89,15 @@ export default function CreateExam() {
     const formattedQuestions = template.questions.map(q => ({
       text: q.text,
       type: q.type,
+      subject: q.subject || (
+        templateKey === 'jeePhysics'
+          ? 'Physics'
+          : templateKey === 'jeeChemistry'
+            ? 'Chemistry'
+            : templateKey === 'jeeMathematics'
+              ? 'Mathematics'
+              : 'General'
+      ),
       marks: q.marks,
       correctAnswer: q.type === 'mcq' ? '' : q.correctAnswer,
       options: q.options ? q.options.map(opt => ({
@@ -120,6 +131,7 @@ export default function CreateExam() {
         id: `q-${Date.now()}-${idx}`,
         text: q.text,
         type: q.type as 'mcq' | 'true_false' | 'integer',
+        subject: q.subject.trim() || 'General',
         marks: q.marks,
         orderIndex: idx,
         options: q.options
@@ -374,6 +386,20 @@ export default function CreateExam() {
                         <SelectItem value="integer">Integer Answer</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Subject/Section</Label>
+                    <Input
+                      type="text"
+                      placeholder="e.g., Physics"
+                      {...form.register(`questions.${index}.subject`)}
+                    />
+                    {form.formState.errors.questions?.[index]?.subject && (
+                      <p className="text-sm text-destructive">
+                        {form.formState.errors.questions[index]?.subject?.message}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">

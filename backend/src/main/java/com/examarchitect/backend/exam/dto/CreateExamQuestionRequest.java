@@ -20,6 +20,8 @@ public record CreateExamQuestionRequest(
     @Min(value = 1, message = "Marks must be at least 1")
     Integer marks,
 
+    String subject,
+
     Integer orderIndex,
 
     @Valid

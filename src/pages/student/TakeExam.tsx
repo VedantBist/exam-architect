@@ -48,6 +48,20 @@ function isAnsweredValue(value: unknown): boolean {
   return String(value).trim() !== '';
 }
 
+function getQuestionTimingMap(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  const result: Record<string, number> = {};
+  for (const [questionId, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      result[questionId] = Math.max(0, Math.round(raw));
+    }
+  }
+  return result;
+}
+
 function getRemainingTimeInSeconds(attempt: StudentAttempt, durationMinutes: number): number {
   const startedAt = new Date(attempt.startedAt).getTime();
   const endAt = startedAt + durationMinutes * 60 * 1000;
@@ -69,8 +83,50 @@ export default function TakeExam() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const submittingRef = useRef(false);
   const submittedAttemptsRef = useRef<Set<string>>(new Set());
+  const questionTimingMsRef = useRef<Record<string, number>>({});
+  const activeQuestionIdRef = useRef<string | null>(null);
+  const activeQuestionStartedAtRef = useRef<number | null>(null);
+  const pageVisibleRef = useRef(true);
+  const attemptStatusRef = useRef<StudentAttempt['status'] | null>(null);
   const attemptId = attempt?.id;
   const attemptStatus = attempt?.status;
+
+  const stopTrackingActiveQuestion = useCallback(() => {
+    const activeQuestionId = activeQuestionIdRef.current;
+    const startedAt = activeQuestionStartedAtRef.current;
+    if (!activeQuestionId || startedAt === null) {
+      return;
+    }
+
+    const elapsed = Date.now() - startedAt;
+    if (elapsed > 0) {
+      questionTimingMsRef.current[activeQuestionId] =
+        (questionTimingMsRef.current[activeQuestionId] || 0) + elapsed;
+    }
+    activeQuestionStartedAtRef.current = null;
+  }, []);
+
+  const startTrackingQuestion = useCallback((questionId: string) => {
+    activeQuestionIdRef.current = questionId;
+    activeQuestionStartedAtRef.current = pageVisibleRef.current ? Date.now() : null;
+  }, []);
+
+  const getTimingSnapshot = useCallback(() => {
+    const snapshot = { ...questionTimingMsRef.current };
+    const activeQuestionId = activeQuestionIdRef.current;
+    const startedAt = activeQuestionStartedAtRef.current;
+    if (activeQuestionId && startedAt !== null && pageVisibleRef.current) {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed > 0) {
+        snapshot[activeQuestionId] = (snapshot[activeQuestionId] || 0) + elapsed;
+      }
+    }
+    return snapshot;
+  }, []);
+
+  const buildAttemptAnalytics = useCallback(() => ({
+    questionTimingMs: getTimingSnapshot(),
+  }), [getTimingSnapshot]);
 
   const submitExam = useCallback(
     async (attemptId: string, isAutoSubmit = false, examOverride?: StoredExam) => {
@@ -83,6 +139,15 @@ export default function TakeExam() {
       submittingRef.current = true;
       setSubmitting(true);
       try {
+        const activeAttempt = attempt && attempt.id === attemptId ? attempt : null;
+        if (activeAttempt?.status === 'in-progress') {
+          await updateAttempt(attemptId, {
+            answers: activeAttempt.answers,
+            analytics: buildAttemptAnalytics(),
+          });
+        }
+
+        stopTrackingActiveQuestion();
         const submittedAttempt = await submitAttempt(attemptId, activeExam);
         if (!submittedAttempt) {
           throw new Error('Attempt not found');
@@ -101,7 +166,7 @@ export default function TakeExam() {
         setShowSubmitDialog(false);
       }
     },
-    [exam, navigate]
+    [attempt, buildAttemptAnalytics, exam, navigate, stopTrackingActiveQuestion]
   );
 
   const initializeExam = useCallback(async () => {
@@ -136,6 +201,10 @@ export default function TakeExam() {
 
       const currentAttempt =
         existingAttempt ?? await createAttempt(examId, user.id, user.fullName, examData);
+
+      questionTimingMsRef.current = getQuestionTimingMap(currentAttempt.analytics?.questionTimingMs);
+      activeQuestionIdRef.current = null;
+      activeQuestionStartedAtRef.current = null;
 
       const remainingTime = getRemainingTimeInSeconds(currentAttempt, examData.durationMinutes);
       if (remainingTime <= 0 && currentAttempt.status === 'in-progress') {
@@ -180,6 +249,60 @@ export default function TakeExam() {
     };
   }, [attemptId, attemptStatus, submitExam]);
 
+  useEffect(() => {
+    attemptStatusRef.current = attemptStatus ?? null;
+  }, [attemptStatus]);
+
+  useEffect(() => {
+    if (!exam || !attempt || attempt.status !== 'in-progress') {
+      return;
+    }
+
+    const activeQuestion = exam.questions[currentIndex];
+    if (!activeQuestion) {
+      return;
+    }
+
+    stopTrackingActiveQuestion();
+    startTrackingQuestion(activeQuestion.id);
+
+    return () => {
+      stopTrackingActiveQuestion();
+    };
+  }, [attempt, currentIndex, exam, startTrackingQuestion, stopTrackingActiveQuestion]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        pageVisibleRef.current = false;
+        stopTrackingActiveQuestion();
+        return;
+      }
+
+      pageVisibleRef.current = true;
+      if (activeQuestionIdRef.current && activeQuestionStartedAtRef.current === null) {
+        activeQuestionStartedAtRef.current = Date.now();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [stopTrackingActiveQuestion]);
+
+  useEffect(() => () => {
+    if (!attemptId || attemptStatusRef.current !== 'in-progress') {
+      return;
+    }
+    stopTrackingActiveQuestion();
+    void updateAttempt(attemptId, {
+      analytics: {
+        questionTimingMs: questionTimingMsRef.current,
+      },
+    });
+  }, [attemptId, stopTrackingActiveQuestion]);
+
   async function saveAnswer(questionId: string, value: string | number | boolean) {
     if (!attempt) return;
 
@@ -188,6 +311,7 @@ export default function TakeExam() {
         ...attempt.answers,
         [questionId]: value,
       },
+      analytics: buildAttemptAnalytics(),
     });
 
     if (updatedAttempt) {

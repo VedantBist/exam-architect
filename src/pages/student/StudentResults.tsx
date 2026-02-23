@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { CheckCircle, FileText, Sparkles, Trophy, TrendingUp, XCircle } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowRight, CheckCircle, FileText, Sparkles, Trophy, TrendingUp, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/lib/auth';
 import { getAttemptsByStudent, getExamById, getStudentInsights, type StudentInsights } from '@/lib/examStorage';
 import { toast } from 'sonner';
-import { getBackendErrorMessage } from '@/lib/backendClient';
+import { getBackendErrorMessage, isResultsAnalysisEnabled } from '@/lib/backendClient';
 
 interface DisplayResult {
   id: string;
@@ -28,6 +28,8 @@ export default function StudentResults() {
   const [insights, setInsights] = useState<StudentInsights | null>(null);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const analysisEnabled = isResultsAnalysisEnabled();
 
   useEffect(() => {
     async function fetchResults() {
@@ -201,7 +203,27 @@ export default function StudentResults() {
         ) : (
           <div className="space-y-4">
             {results.map((result) => (
-              <Card key={result.id} className="shadow-card transition-all hover:shadow-card-hover">
+              <Card
+                key={result.id}
+                className={`shadow-card transition-all hover:shadow-card-hover ${
+                  analysisEnabled ? 'cursor-pointer' : ''
+                }`}
+                role={analysisEnabled ? 'button' : undefined}
+                tabIndex={analysisEnabled ? 0 : undefined}
+                onClick={
+                  analysisEnabled ? () => navigate(`/dashboard/my-results/${result.id}`) : undefined
+                }
+                onKeyDown={
+                  analysisEnabled
+                    ? (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          navigate(`/dashboard/my-results/${result.id}`);
+                        }
+                      }
+                    : undefined
+                }
+              >
                 <CardContent className="p-6">
                   <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
                     <div className="space-y-1">
@@ -264,6 +286,18 @@ export default function StudentResults() {
                       className={`h-2 ${result.passed ? '[&>div]:bg-success' : '[&>div]:bg-destructive'}`}
                     />
                   </div>
+
+                  {analysisEnabled && (
+                    <div className="mt-4 flex justify-end border-t pt-4">
+                      <Link
+                        to={`/dashboard/my-results/${result.id}`}
+                        className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
+                      >
+                        View Detailed Analysis
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}

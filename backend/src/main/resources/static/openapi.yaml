@@ -341,6 +341,27 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/AttemptNotFoundError'
+  /api/v1/attempts/{attemptId}/analysis:
+    get:
+      tags: [Attempts]
+      summary: Detailed attempt analysis by subject/section
+      operationId: getAttemptAnalysis
+      parameters:
+        - $ref: '#/components/parameters/AttemptId'
+        - $ref: '#/components/parameters/XUserId'
+      responses:
+        '200':
+          description: Attempt analysis payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttemptAnalysis'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/AttemptNotFoundError'
   /api/v1/stats/exams:
     get:
       tags: [Stats]
@@ -585,6 +606,8 @@ components:
         type:
           type: string
           enum: [mcq, true_false, integer]
+        subject:
+          type: string
         marks:
           type: integer
         orderIndex:
@@ -599,7 +622,7 @@ components:
             - type: number
             - type: boolean
           nullable: true
-      required: [id, text, type, marks, orderIndex]
+      required: [id, text, type, subject, marks, orderIndex]
     ExamSummary:
       type: object
       properties:
@@ -669,6 +692,8 @@ components:
         marks:
           type: integer
           minimum: 1
+        subject:
+          type: string
         orderIndex:
           type: integer
         options:
@@ -747,6 +772,9 @@ components:
               - type: string
               - type: number
               - type: boolean
+        analytics:
+          type: object
+          additionalProperties: true
         score:
           type: integer
         totalMarks:
@@ -769,6 +797,7 @@ components:
         - studentId
         - studentName
         - answers
+        - analytics
         - score
         - totalMarks
         - percentage
@@ -794,6 +823,87 @@ components:
               - type: string
               - type: number
               - type: boolean
+        analytics:
+          type: object
+          additionalProperties: true
+    AttemptSubjectAnalysis:
+      type: object
+      properties:
+        subject:
+          type: string
+        totalQuestions:
+          type: integer
+        attemptedQuestions:
+          type: integer
+        correctQuestions:
+          type: integer
+        wrongQuestions:
+          type: integer
+        unattemptedQuestions:
+          type: integer
+        marksObtained:
+          type: integer
+        totalMarks:
+          type: integer
+        marksPercentage:
+          type: number
+        avgTimePerQuestionSeconds:
+          type: number
+        avgTimePerAttemptedQuestionSeconds:
+          type: number
+        totalTimeSpentSeconds:
+          type: number
+      required:
+        - subject
+        - totalQuestions
+        - attemptedQuestions
+        - correctQuestions
+        - wrongQuestions
+        - unattemptedQuestions
+        - marksObtained
+        - totalMarks
+        - marksPercentage
+        - avgTimePerQuestionSeconds
+        - avgTimePerAttemptedQuestionSeconds
+        - totalTimeSpentSeconds
+    AttemptAnalysis:
+      type: object
+      properties:
+        attemptId:
+          type: string
+        examId:
+          type: string
+        examTitle:
+          type: string
+        score:
+          type: integer
+        totalMarks:
+          type: integer
+        percentage:
+          type: number
+        status:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+        subjects:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttemptSubjectAnalysis'
+      required:
+        - attemptId
+        - examId
+        - examTitle
+        - score
+        - totalMarks
+        - percentage
+        - status
+        - startedAt
+        - subjects
     ExamStats:
       type: object
       properties:

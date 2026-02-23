@@ -41,6 +41,10 @@ public class ExamAttempt {
   @ColumnTransformer(write = "?::jsonb")
   private String answersJson;
 
+  @Column(name = "analytics_json", nullable = false, columnDefinition = "jsonb")
+  @ColumnTransformer(write = "?::jsonb")
+  private String analyticsJson;
+
   @Column(name = "score", nullable = false)
   private Integer score;
 
@@ -65,6 +69,12 @@ public class ExamAttempt {
   @PrePersist
   void prePersist() {
     OffsetDateTime now = OffsetDateTime.now();
+    if (answersJson == null || answersJson.isBlank()) {
+      answersJson = "{}";
+    }
+    if (analyticsJson == null || analyticsJson.isBlank()) {
+      analyticsJson = "{}";
+    }
     if (startedAt == null) {
       startedAt = now;
     }

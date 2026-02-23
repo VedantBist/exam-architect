@@ -20,6 +20,7 @@ export class BackendApiError extends Error {
 
 const BACKEND_MODE = (import.meta.env.VITE_BACKEND_MODE || 'local').toLowerCase();
 const DEFAULT_BACKEND_URL = 'http://localhost:8080/api/v1';
+const RESULTS_ANALYSIS_FLAG = String(import.meta.env.VITE_RESULTS_ANALYSIS_ENABLED ?? 'true').toLowerCase();
 
 export function isBackendApiMode(): boolean {
   return BACKEND_MODE === 'api';
@@ -28,6 +29,10 @@ export function isBackendApiMode(): boolean {
 export function getBackendBaseUrl(): string {
   const configured = import.meta.env.VITE_BACKEND_URL || DEFAULT_BACKEND_URL;
   return configured.endsWith('/') ? configured.slice(0, -1) : configured;
+}
+
+export function isResultsAnalysisEnabled(): boolean {
+  return RESULTS_ANALYSIS_FLAG !== 'false';
 }
 
 export function getBackendErrorMessage(error: unknown, fallback = 'Request failed'): string {

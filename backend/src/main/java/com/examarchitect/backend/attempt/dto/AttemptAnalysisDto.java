@@ -2,20 +2,18 @@ package com.examarchitect.backend.attempt.dto;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.util.Map;
+import java.util.List;
 
-public record StudentAttemptDto(
-    String id,
+public record AttemptAnalysisDto(
+    String attemptId,
     String examId,
-    String studentId,
-    String studentName,
-    Map<String, Object> answers,
-    Map<String, Object> analytics,
+    String examTitle,
     Integer score,
     Integer totalMarks,
     BigDecimal percentage,
     String status,
     OffsetDateTime startedAt,
-    OffsetDateTime submittedAt
+    OffsetDateTime submittedAt,
+    List<AttemptSubjectAnalysisDto> subjects
 ) {
 }
